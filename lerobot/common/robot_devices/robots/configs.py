@@ -15,6 +15,7 @@
 import abc
 from dataclasses import dataclass, field
 from typing import Sequence
+import numpy as np
 
 import draccus
 
@@ -215,12 +216,12 @@ class KochRobotConfig(ManipulatorRobotConfig):
     # `max_relative_target` limits the magnitude of the relative positional target vector for safety purposes.
     # Set this to a positive scalar to have the same value for all motors, or a list that is the same length as
     # the number of motors in your follower arms.
-    max_relative_target: int | None = None
+    max_relative_target: int | None = 10
 
     leader_arms: dict[str, MotorsBusConfig] = field(
         default_factory=lambda: {
             "main": DynamixelMotorsBusConfig(
-                port="/dev/tty.usbmodem585A0085511",
+                port="/dev/ttyACM0",
                 motors={
                     # name: (index, model)
                     "shoulder_pan": [1, "xl330-m077"],
@@ -237,7 +238,7 @@ class KochRobotConfig(ManipulatorRobotConfig):
     follower_arms: dict[str, MotorsBusConfig] = field(
         default_factory=lambda: {
             "main": DynamixelMotorsBusConfig(
-                port="/dev/tty.usbmodem585A0076891",
+                port="/dev/ttyACM1",
                 motors={
                     # name: (index, model)
                     "shoulder_pan": [1, "xl430-w250"],
@@ -253,13 +254,13 @@ class KochRobotConfig(ManipulatorRobotConfig):
 
     cameras: dict[str, CameraConfig] = field(
         default_factory=lambda: {
-            "laptop": OpenCVCameraConfig(
-                camera_index=0,
+            "front": OpenCVCameraConfig(
+                camera_index=10,
                 fps=30,
-                width=640,
-                height=480,
+                width=1280,
+                height=720,
             ),
-            "phone": OpenCVCameraConfig(
+            "above": OpenCVCameraConfig(
                 camera_index=1,
                 fps=30,
                 width=640,
@@ -271,7 +272,15 @@ class KochRobotConfig(ManipulatorRobotConfig):
     # ~ Koch specific settings ~
     # Sets the leader arm in torque mode with the gripper motor set to this angle. This makes it possible
     # to squeeze the gripper and have it spring back to an open position on its own.
-    gripper_open_degree: float = 35.156
+    gripper_open_degree: float = 45.156
+
+    dh_params = [
+        {"theta": 0, "d": 0.0563, "a": 0, "alpha": np.pi/2},
+        {"theta": 0, "d": 0, "a": 0.108347, "alpha": np.pi},
+        {"theta": 0, "d": 0, "a": 0.090467, "alpha": 0},
+        {"theta": -np.pi/2, "d": 0, "a": 0, "alpha": -np.pi/2},
+        {"theta": 0, "d": 0.05815, "a": 0, "alpha": 0},
+    ]
 
     mock: bool = False
 

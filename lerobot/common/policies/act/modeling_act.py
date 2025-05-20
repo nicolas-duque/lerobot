@@ -305,6 +305,19 @@ class ACT(nn.Module):
         super().__init__()
         self.config = config
 
+        #####################
+        # DH params for Koch robot
+        self.robot_type = config.robot_type
+        if self.robot_type == "koch":
+            self.dh_params = [
+            {"theta": 0, "d": 0.0563, "a": 0, "alpha": np.pi/2},
+            {"theta": 0, "d": 0, "a": 0.108347, "alpha": np.pi},
+            {"theta": 0, "d": 0, "a": 0.090467, "alpha": 0},
+            {"theta": -np.pi/2, "d": 0, "a": 0, "alpha": -np.pi/2},
+            {"theta": 0, "d": 0.05815, "a": 0, "alpha": 0},
+            ]
+
+
         if self.config.use_vae:
             self.vae_encoder = ACTEncoder(config, is_vae_encoder=True)
             self.vae_encoder_cls_embed = nn.Embedding(1, config.dim_model)
@@ -414,6 +427,16 @@ class ACT(nn.Module):
             batch_size = batch["observation.images"][0].shape[0]
         else:
             batch_size = batch["observation.environment_state"].shape[0]
+
+        #############
+        # Get robot EE position (Forward Kinematics) - only for Koch robot
+        #if self.robot_type == "koch":
+        #    ee_pos = []
+        #    for i, state in enumerate(batch["observation.state"]):
+        #        ee_pos[i] = self.compute_fk(state)
+        #        batch["observation.state"][i] = torch.cat([ee_pos[i], state], dim=-1)  # (B, J+3)
+
+        ############
 
         # Prepare the latent for input to the transformer encoder.
         if self.config.use_vae and "action" in batch:

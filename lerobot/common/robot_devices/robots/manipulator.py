@@ -167,6 +167,10 @@ class ManipulatorRobot:
         self.is_connected = False
         self.logs = {}
 
+        # DH params for FK (Koch robot)
+        if self.robot_type == "koch":
+            self.dh_params = self.config.dh_params
+
     def get_motor_names(self, arm: dict[str, MotorsBus]) -> list:
         return [f"{arm}_{motor}" for arm, bus in arm.items() for motor in bus.motors]
 
@@ -194,8 +198,10 @@ class ManipulatorRobot:
             },
             "observation.state": {
                 "dtype": "float32",
-                "shape": (len(state_names),),
-                "names": state_names,
+                "shape": (len(state_names)+3,),
+                #"shape": (len(state_names),),
+                "names": ["x", "y", "z"].append(state_names),
+                #"names": state_names,
             },
         }
 
@@ -545,6 +551,10 @@ class ManipulatorRobot:
                 state.append(follower_pos[name])
         state = torch.cat(state)
 
+        # Get robot EE position (Forward Kinematics) - only for Koch robot
+        if self.robot_type == "koch":
+            ee_pos = self.compute_fk(state)
+
         # Capture images from cameras
         images = {}
         for name in self.cameras:
@@ -557,6 +567,15 @@ class ManipulatorRobot:
         # Populate output dictionaries and format to pytorch
         obs_dict = {}
         obs_dict["observation.state"] = state
+
+        ############################################################################################
+        # Add EE position to observation
+        if self.robot_type == "koch":
+            obs_dict["observation.state"] = torch.cat([ee_pos, state], dim=-1)
+            obs_dict["observation.state"] = obs_dict["observation.state"].to(torch.float32)
+            print(obs_dict["observation.state"].dtype)
+        ############################################################################################
+
         for name in self.cameras:
             obs_dict[f"observation.images.{name}"] = images[name]
         return obs_dict
@@ -625,3 +644,27 @@ class ManipulatorRobot:
     def __del__(self):
         if getattr(self, "is_connected", False):
             self.disconnect()
+
+    ##################################################################################################
+    # Function to compute transformation matrix using DH parameters
+    def dh_transform(self, theta, d, a, alpha):
+        ct, st = np.cos(theta), np.sin(theta)
+        ca, sa = np.cos(alpha), np.sin(alpha)
+        return np.array([
+            [ct, -st * ca, st * sa, a * ct],
+            [st, ct * ca, -ct * sa, a * st],
+            [0, sa, ca, d],
+            [0, 0, 0, 1]
+        ])
+    
+    # Function to compute joint positions based on DH parameters
+    def compute_fk(self,state):
+        T = np.eye(4)
+        state = np.radians(state)
+        state[3] -= np.pi/2  # Adjust for the wrist roll
+            
+        for i, params in enumerate(self.dh_params):
+            Ti = self.dh_transform(state[i], params["d"], params["a"], params["alpha"])
+            T = T@Ti # Multiply transformation matrices
+
+        return torch.tensor((T[:3, 3]))  # Extract position (x, y, z)

@@ -51,7 +51,7 @@ class TrainPipelineConfig(HubMixin):
     seed: int | None = 1000
     # Number of workers for the dataloader.
     num_workers: int = 4
-    batch_size: int = 8
+    batch_size: int = 4
     steps: int = 100_000
     eval_freq: int = 20_000
     log_freq: int = 200
@@ -63,6 +63,10 @@ class TrainPipelineConfig(HubMixin):
     scheduler: LRSchedulerConfig | None = None
     eval: EvalConfig = field(default_factory=EvalConfig)
     wandb: WandBConfig = field(default_factory=WandBConfig)
+
+    # Validation params
+    validation_freq: int = 200
+    validation_split_ratio: float = 0.2
 
     def __post_init__(self):
         self.checkpoint_path = None
@@ -89,7 +93,7 @@ class TrainPipelineConfig(HubMixin):
                 )
             policy_path = Path(config_path).parent
             self.policy.pretrained_path = policy_path
-            self.checkpoint_path = policy_path.parent
+            self.checkpoint_path = policy_path
 
         if not self.job_name:
             if self.env is None:
@@ -107,8 +111,8 @@ class TrainPipelineConfig(HubMixin):
             train_dir = f"{now:%Y-%m-%d}/{now:%H-%M-%S}_{self.job_name}"
             self.output_dir = Path("outputs/train") / train_dir
 
-        if isinstance(self.dataset.repo_id, list):
-            raise NotImplementedError("LeRobotMultiDataset is not currently implemented.")
+        #if isinstance(self.dataset.repo_id, list):
+        #    raise NotImplementedError("LeRobotMultiDataset is not currently implemented.")
 
         if not self.use_policy_training_preset and (self.optimizer is None or self.scheduler is None):
             raise ValueError("Optimizer and Scheduler must be set when the policy presets are not used.")

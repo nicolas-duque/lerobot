@@ -137,6 +137,9 @@ class ACTConfig(PreTrainedConfig):
     optimizer_weight_decay: float = 1e-4
     optimizer_lr_backbone: float = 1e-5
 
+    # For FK
+    robot_type: str | None = "Koch"
+
     def __post_init__(self):
         super().__post_init__()
 

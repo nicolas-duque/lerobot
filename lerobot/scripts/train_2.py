@@ -24,6 +24,8 @@ from termcolor import colored
 from torch.amp import GradScaler
 from torch.optim import Optimizer
 
+import numpy as np
+
 from lerobot.common.datasets.factory import make_dataset
 from lerobot.common.datasets.sampler import EpisodeAwareSampler
 from lerobot.common.datasets.utils import cycle
@@ -68,6 +70,7 @@ def update_policy(
     device = get_device_from_parameters(policy)
     policy.train()
     with torch.autocast(device_type=device.type) if use_amp else nullcontext():
+
         loss, output_dict = policy.forward(batch)
         # TODO(rcadene): policy.unnormalize_outputs(out_dict)
     grad_scaler.scale(loss).backward()
@@ -120,12 +123,27 @@ def train(cfg: TrainPipelineConfig):
         set_seed(cfg.seed)
 
     # Check device is available
-    device = get_safe_torch_device(cfg.policy.device, log=True)
+    device = get_safe_torch_device(cfg.device, log=True)
     torch.backends.cudnn.benchmark = True
     torch.backends.cuda.matmul.allow_tf32 = True
 
     logging.info("Creating dataset")
     dataset = make_dataset(cfg)
+
+    ####################################################################
+    print(dataset.hf_dataset[0])
+    dataset.hf_dataset = dataset.hf_dataset.map(add_fk)
+    dataset.meta.features["observation.state"]["shape"] = (dataset.meta.features["observation.state"]["shape"][0] + 3, )
+
+    dataset.meta.stats["observation.state"]["mean"]  = np.mean(dataset.hf_dataset["observation.state"], axis=0)
+    dataset.meta.stats["observation.state"]["std"]  = np.std(dataset.hf_dataset["observation.state"], axis=0)
+    dataset.meta.stats["observation.state"]["min"]  = np.min(dataset.hf_dataset["observation.state"], axis=0)
+    dataset.meta.stats["observation.state"]["max"]  = np.max(dataset.hf_dataset["observation.state"], axis=0)
+
+    print(dataset.hf_dataset[0])
+
+
+    #####################################################################
 
     # Create environment used for evaluating checkpoints during training on simulation data.
     # On real-world data, no need to create an environment as evaluations are done outside train.py,
@@ -133,17 +151,18 @@ def train(cfg: TrainPipelineConfig):
     eval_env = None
     if cfg.eval_freq > 0 and cfg.env is not None:
         logging.info("Creating env")
-        eval_env = make_env(cfg.env, n_envs=cfg.eval.batch_size, use_async_envs=cfg.eval.use_async_envs)
+        eval_env = make_env(cfg.env, n_envs=cfg.eval.batch_size)
 
     logging.info("Creating policy")
     policy = make_policy(
         cfg=cfg.policy,
+        device=device,
         ds_meta=dataset._datasets[0].meta if hasattr(dataset, "_datasets") else dataset.meta,
     )
 
     logging.info("Creating optimizer and scheduler")
     optimizer, lr_scheduler = make_optimizer_and_scheduler(cfg, policy)
-    grad_scaler = GradScaler(device.type, enabled=cfg.policy.use_amp)
+    grad_scaler = GradScaler(device, enabled=cfg.use_amp)
 
     step = 0  # number of policy updates (forward + backward + optim)
 
@@ -161,28 +180,38 @@ def train(cfg: TrainPipelineConfig):
     logging.info(f"{dataset.num_episodes=}")
     logging.info(f"{num_learnable_params=} ({format_big_number(num_learnable_params)})")
     logging.info(f"{num_total_params=} ({format_big_number(num_total_params)})")
+    
+    # Episode-level split 
+    # #################################################################################
+    num_eps = len(dataset.episode_data_index["from"])
+    val_size = int(num_eps * 0.1)
+    g = torch.Generator().manual_seed(cfg.seed or 42)
+    shuffled = torch.randperm(num_eps, generator=g).tolist()
+    split_episodes = {"train": shuffled[:-val_size], "val": shuffled[-val_size:]}
 
-    # create dataloader for offline training
-    if hasattr(cfg.policy, "drop_n_last_frames"):
-        shuffle = False
-        sampler = EpisodeAwareSampler(
-            dataset.episode_data_index,
-            drop_n_last_frames=cfg.policy.drop_n_last_frames,
-            shuffle=True,
+    # Build datasets and dataloaders
+    dataloaders = {}
+    for split, eps in split_episodes.items():
+        indices = list(
+            EpisodeAwareSampler(
+                dataset.episode_data_index,
+                episode_indices_to_use=eps,
+                drop_n_last_frames=getattr(cfg.policy, "drop_n_last_frames", 0),
+                shuffle=True,
+            )
         )
-    else:
-        shuffle = True
-        sampler = None
+        subset = torch.utils.data.Subset(dataset, indices)
+        dataloaders[split] = torch.utils.data.DataLoader(
+            subset,
+            batch_size=cfg.batch_size,
+            num_workers=cfg.num_workers,
+            shuffle=True,
+            pin_memory=device.type != "cpu",
+            drop_last=(split == "train"),
+        )
 
-    dataloader = torch.utils.data.DataLoader(
-        dataset,
-        num_workers=cfg.num_workers,
-        batch_size=cfg.batch_size,
-        shuffle=shuffle,
-        sampler=sampler,
-        pin_memory=device.type != "cpu",
-        drop_last=False,
-    )
+    dataloader = dataloaders["train"]
+    val_dataloader = dataloaders["val"]
     dl_iter = cycle(dataloader)
 
     policy.train()
@@ -193,7 +222,8 @@ def train(cfg: TrainPipelineConfig):
         "lr": AverageMeter("lr", ":0.1e"),
         "update_s": AverageMeter("updt_s", ":.3f"),
         "dataloading_s": AverageMeter("data_s", ":.3f"),
-        
+        "val_loss": AverageMeter("val_loss", ":.4f"),
+        "val_s": AverageMeter("val_s", ":.4f"),  # val_s metric for amortized cost of validation per step
     }
 
     train_tracker = MetricsTracker(
@@ -201,7 +231,7 @@ def train(cfg: TrainPipelineConfig):
     )
 
     logging.info("Start offline training on a fixed dataset")
-    for _ in range(step, cfg.steps):
+    for current_step in range(step, cfg.steps):
         start_time = time.perf_counter()
         batch = next(dl_iter)
         train_tracker.dataloading_s = time.perf_counter() - start_time
@@ -218,25 +248,66 @@ def train(cfg: TrainPipelineConfig):
             cfg.optimizer.grad_clip_norm,
             grad_scaler=grad_scaler,
             lr_scheduler=lr_scheduler,
-            use_amp=cfg.policy.use_amp,
+            use_amp=cfg.use_amp,
         )
 
         # Note: eval and checkpoint happens *after* the `step`th training update has completed, so we
         # increment `step` here.
-        step += 1
+        step = current_step + 1
         train_tracker.step()
         is_log_step = cfg.log_freq > 0 and step % cfg.log_freq == 0
         is_saving_step = step % cfg.save_freq == 0 or step == cfg.steps
         is_eval_step = cfg.eval_freq > 0 and step % cfg.eval_freq == 0
 
+
+        #########################################################################################
+        is_validation_step = (
+            val_dataloader is not None and cfg.validation_freq > 0 and step % cfg.validation_freq == 0
+        )
+
+        # Integrate validation loop directly here
+        if is_validation_step:
+            validation_start_time = time.perf_counter()
+
+            policy.eval()
+            total_val_loss = 0.0
+            fraction = 0.05  # only sample 8% of val dataset. Hardcoded for simplicity.
+            num_batches_to_run = int(fraction * len(val_dataloader))
+            with torch.no_grad():
+                for batch_idx, val_batch in enumerate(val_dataloader):
+                    if batch_idx >= num_batches_to_run:
+                        break
+                    for key in val_batch:
+                        if isinstance(val_batch[key], torch.Tensor):
+                            val_batch[key] = val_batch[key].to(device, non_blocking=True)
+                    with torch.autocast(device_type=device.type, enabled=cfg.use_amp):
+                        loss, _ = policy.forward(val_batch)
+                    if torch.isfinite(loss):
+                        total_val_loss += loss.item()
+
+            policy.train()
+            avg_val_loss = total_val_loss / num_batches_to_run
+            train_tracker.metrics["val_loss"].reset()
+            train_tracker.metrics["val_loss"].update(avg_val_loss)
+
+            validation_duration = time.perf_counter() - validation_start_time
+            amortized_val_time = validation_duration / cfg.validation_freq
+
+            train_tracker.metrics["val_s"].reset()
+            train_tracker.metrics["val_s"].update(amortized_val_time)
+
+        ###########################################################################################
+
         if is_log_step:
             logging.info(train_tracker)
+            #log_message = str(train_tracker)  # Get base log string
+            #logging.info(log_message)
             if wandb_logger:
                 wandb_log_dict = train_tracker.to_dict()
                 if output_dict:
                     wandb_log_dict.update(output_dict)
                 wandb_logger.log_dict(wandb_log_dict, step)
-            train_tracker.reset_averages()
+            train_tracker.reset_averages(keys=["loss", "grad_norm", "lr", "update_s", "dataloading_s"])
 
         if cfg.save_checkpoint and is_saving_step:
             logging.info(f"Checkpoint policy after step {step}")
@@ -249,10 +320,7 @@ def train(cfg: TrainPipelineConfig):
         if cfg.env and is_eval_step:
             step_id = get_step_identifier(step, cfg.steps)
             logging.info(f"Eval policy at step {step}")
-            with (
-                torch.no_grad(),
-                torch.autocast(device_type=device.type) if cfg.policy.use_amp else nullcontext(),
-            ):
+            with torch.no_grad(), torch.autocast(device_type=device.type) if cfg.use_amp else nullcontext():
                 eval_info = eval_policy(
                     eval_env,
                     policy,
@@ -284,6 +352,44 @@ def train(cfg: TrainPipelineConfig):
     logging.info("End of training")
 
 
+##################################################################################################
+# Function to compute transformation matrix using DH parameters
+def dh_transform(theta, d, a, alpha):
+    ct, st = np.cos(theta), np.sin(theta)
+    ca, sa = np.cos(alpha), np.sin(alpha)
+    return np.array([
+        [ct, -st * ca, st * sa, a * ct],
+        [st, ct * ca, -ct * sa, a * st],
+        [0, sa, ca, d],
+        [0, 0, 0, 1]
+    ])
+
+# Function to compute joint positions based on DH parameters
+def compute_fk(dh_params,state):
+    T = np.eye(4)
+    state = np.radians(state)
+    state[3] -= np.pi/2  # Adjust for the wrist roll
+        
+    for i, params in enumerate(dh_params):
+        Ti = dh_transform(state[i], params["d"], params["a"], params["alpha"])
+        T = T@Ti # Multiply transformation matrices
+
+    return torch.tensor(T[:3, 3])  # Extract position (x, y, z)
+    
+def add_fk(data):
+        dh_params = [
+        {"theta": 0, "d": 0.0563, "a": 0, "alpha": np.pi/2},
+        {"theta": 0, "d": 0, "a": 0.108347, "alpha": np.pi},
+        {"theta": 0, "d": 0, "a": 0.090467, "alpha": 0},
+        {"theta": -np.pi/2, "d": 0, "a": 0, "alpha": -np.pi/2},
+        {"theta": 0, "d": 0.05815, "a": 0, "alpha": 0},
+    ]
+        # Calculate FK for each joint
+        fk = compute_fk(dh_params, data["observation.state"])
+        # Augment observation state with FK
+        data["observation.state"] = torch.cat([fk, data["observation.state"]], dim=-1)
+        return data
+##################################################################################################  
 if __name__ == "__main__":
     init_logging()
     train()
