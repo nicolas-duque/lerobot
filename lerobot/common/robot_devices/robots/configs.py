@@ -255,16 +255,16 @@ class KochRobotConfig(ManipulatorRobotConfig):
     cameras: dict[str, CameraConfig] = field(
         default_factory=lambda: {
             "front": OpenCVCameraConfig(
-                camera_index=10,
+                camera_index=4,
                 fps=30,
                 width=1280,
                 height=720,
             ),
             "above": OpenCVCameraConfig(
-                camera_index=1,
+                camera_index=10,
                 fps=30,
-                width=640,
-                height=480,
+                width=1280,#640
+                height=720,#480
             ),
         }
     )

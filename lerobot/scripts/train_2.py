@@ -123,7 +123,7 @@ def train(cfg: TrainPipelineConfig):
         set_seed(cfg.seed)
 
     # Check device is available
-    device = get_safe_torch_device(cfg.device, log=True)
+    device = get_safe_torch_device(cfg.policy.device, log=True)
     torch.backends.cudnn.benchmark = True
     torch.backends.cuda.matmul.allow_tf32 = True
 
@@ -156,13 +156,12 @@ def train(cfg: TrainPipelineConfig):
     logging.info("Creating policy")
     policy = make_policy(
         cfg=cfg.policy,
-        device=device,
         ds_meta=dataset._datasets[0].meta if hasattr(dataset, "_datasets") else dataset.meta,
     )
 
     logging.info("Creating optimizer and scheduler")
     optimizer, lr_scheduler = make_optimizer_and_scheduler(cfg, policy)
-    grad_scaler = GradScaler(device, enabled=cfg.use_amp)
+    grad_scaler = GradScaler(device.type, enabled=cfg.policy.use_amp)
 
     step = 0  # number of policy updates (forward + backward + optim)
 
@@ -184,7 +183,7 @@ def train(cfg: TrainPipelineConfig):
     # Episode-level split 
     # #################################################################################
     num_eps = len(dataset.episode_data_index["from"])
-    val_size = int(num_eps * 0.1)
+    val_size = 1#int(num_eps * 0.1)
     g = torch.Generator().manual_seed(cfg.seed or 42)
     shuffled = torch.randperm(num_eps, generator=g).tolist()
     split_episodes = {"train": shuffled[:-val_size], "val": shuffled[-val_size:]}
@@ -248,7 +247,7 @@ def train(cfg: TrainPipelineConfig):
             cfg.optimizer.grad_clip_norm,
             grad_scaler=grad_scaler,
             lr_scheduler=lr_scheduler,
-            use_amp=cfg.use_amp,
+            use_amp=cfg.policy.use_amp,
         )
 
         # Note: eval and checkpoint happens *after* the `step`th training update has completed, so we
@@ -280,7 +279,7 @@ def train(cfg: TrainPipelineConfig):
                     for key in val_batch:
                         if isinstance(val_batch[key], torch.Tensor):
                             val_batch[key] = val_batch[key].to(device, non_blocking=True)
-                    with torch.autocast(device_type=device.type, enabled=cfg.use_amp):
+                    with torch.autocast(device_type=device.type, enabled=cfg.policy.use_amp):
                         loss, _ = policy.forward(val_batch)
                     if torch.isfinite(loss):
                         total_val_loss += loss.item()

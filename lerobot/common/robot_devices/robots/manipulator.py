@@ -198,10 +198,10 @@ class ManipulatorRobot:
             },
             "observation.state": {
                 "dtype": "float32",
-                "shape": (len(state_names)+3,),
-                #"shape": (len(state_names),),
-                "names": ["x", "y", "z"].append(state_names),
-                #"names": state_names,
+                #"shape": (len(state_names)+3,),
+                "shape": (len(state_names),),
+                #"names": ["x", "y", "z"].append(state_names),
+                "names": state_names,
             },
         }
 

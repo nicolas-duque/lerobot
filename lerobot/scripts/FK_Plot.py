@@ -158,8 +158,9 @@ def main(cfg: ControlPipelineConfig):
     video_paths = [
          dataset.root / dataset.meta.get_video_file_path(c_cfg.episode,key) for key in dataset.meta.video_keys
     ]
-
+    print("VideoCapture")
     caps = [ cv2.VideoCapture(path) for path in video_paths]
+    print("GetFrameCount")
     frames = [cap.get(cv2.CAP_PROP_FRAME_COUNT) for cap in caps]
 
     # Check if video opened successfully
@@ -170,7 +171,7 @@ def main(cfg: ControlPipelineConfig):
 
     
     # Load pretrained policy
-    policy = None if c_cfg.policy is None else make_policy(c_cfg.policy, c_cfg.device, ds_meta=dataset.meta)
+    policy = None if c_cfg.policy is None else make_policy(c_cfg.policy, ds_meta=dataset.meta)
     device = c_cfg.device
     if isinstance(device, str):
         device = get_safe_torch_device(device)
@@ -196,6 +197,7 @@ def main(cfg: ControlPipelineConfig):
         obs_dict["observation.state"] = observations[idx]['observation.state']
 
         frames = {}
+        
         for cap, name in zip(caps,dataset.meta.video_keys):
             ret, frames[name] = cap.read()
             obs_dict[f"{name}"] = torch.from_numpy(frames[name])
@@ -314,27 +316,7 @@ def main(cfg: ControlPipelineConfig):
 
         ax3d.quiver(*origin, *x_axis, color="r", label="X-axis" if i == 0 else "")
         ax3d.quiver(*origin, *z_axis, color="b", label="Z-axis" if i == 0 else "")
-    ''' 
-    dh_params_new = [
-        {"theta": np.radians(observations[100,0]), "d": 0.0563, "a": 0, "alpha": np.pi/2},
-        {"theta": np.radians(observations[100,1]), "d": 0, "a": 0.108347, "alpha": np.pi},
-        {"theta": np.radians(observations[100,2]), "d": 0, "a": 0.090467, "alpha": 0},
-        {"theta": np.radians(observations[100,3])-np.pi/2, "d": 0, "a": 0, "alpha": -np.pi/2},
-        {"theta": np.radians(observations[100,4]), "d": 0.05815, "a": 0, "alpha": 0},
-    ]
-    positions_new, frames_new = compute_positions(dh_params_new)
-    # Plot links
-    ax3d.plot(positions_new[:, 0], positions_new[:, 1], positions_new[:, 2], "bo-", label="Links")
 
-    # Plot coordinate frames
-    for i, frame in enumerate(frames_new):
-        origin = frame[:3, 3]
-        x_axis = frame[:3, 0] * 0.02  # Scale for visibility
-        z_axis = frame[:3, 2] * 0.02
-
-        ax3d.quiver(*origin, *x_axis, color="r", label="X-axis" if i == 0 else "")
-        ax3d.quiver(*origin, *z_axis, color="b", label="Z-axis" if i == 0 else "")
-    '''
     
     # Labels and legend
     ax3d.set_xlabel('X (m)')

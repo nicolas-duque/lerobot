@@ -1,0 +1,15 @@
+dataset:
+  repo_id: nduque/robustness_e7_2
+  
+policy:
+  type: act
+
+output_dir: outputs/train/act_robustness_e7_2
+job_name: robustness_e7_2
+
+wandb:
+  enable: true
+
+batch_size: 4
+
+steps: 200000
