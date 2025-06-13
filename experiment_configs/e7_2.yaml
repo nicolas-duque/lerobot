@@ -4,8 +4,8 @@ dataset:
 policy:
   type: act
 
-output_dir: outputs/train/act_robustness_e7_2
-job_name: robustness_e7_2
+output_dir: outputs/train/act_robustness_e7_2_t
+job_name: robustness_e7_2_t
 
 wandb:
   enable: true

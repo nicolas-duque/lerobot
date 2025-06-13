@@ -186,7 +186,7 @@ def main(cfg: ControlPipelineConfig):
     #axs.set_ylim(0.10,0.15)
     #axs.set_xlim(-0.105,0.085)
 
-    fig.show()
+    plt.show()
 
 
 
