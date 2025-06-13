@@ -91,9 +91,9 @@ class TrainPipelineConfig(HubMixin):
                     f"{config_path=} is expected to be a local path. "
                     "Resuming from the hub is not supported for now."
                 )
-            policy_path = Path(config_path).parent
+            policy_path = Path(config_path)#.parent
             self.policy.pretrained_path = policy_path
-            self.checkpoint_path = policy_path
+            self.checkpoint_path = policy_path.parent
 
         if not self.job_name:
             if self.env is None:

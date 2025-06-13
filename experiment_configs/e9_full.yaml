@@ -1,0 +1,16 @@
+dataset:
+  repo_id: nduque/robustness_e9_3
+  root: /lerobot/datasets/robustness_e9_3
+
+policy:
+  type: act
+
+output_dir: outputs/train/act_robustness_e9_3_full
+job_name: robustness_e9_3_full
+
+wandb:
+  enable: true
+
+batch_size: 4
+
+steps: 300000

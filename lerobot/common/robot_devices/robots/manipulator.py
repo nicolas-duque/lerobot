@@ -661,7 +661,10 @@ class ManipulatorRobot:
     def compute_fk(self,state):
         T = np.eye(4)
         state = np.radians(state)
+        state[1] -= 0.136
+        state[2] += 0.162
         state[3] -= np.pi/2  # Adjust for the wrist roll
+        state[4] *= -1  # Adjust for the gripper orientation
             
         for i, params in enumerate(self.dh_params):
             Ti = self.dh_transform(state[i], params["d"], params["a"], params["alpha"])

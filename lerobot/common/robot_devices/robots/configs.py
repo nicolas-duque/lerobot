@@ -276,8 +276,8 @@ class KochRobotConfig(ManipulatorRobotConfig):
 
     dh_params = [
         {"theta": 0, "d": 0.0563, "a": 0, "alpha": np.pi/2},
-        {"theta": 0, "d": 0, "a": 0.108347, "alpha": np.pi},
-        {"theta": 0, "d": 0, "a": 0.090467, "alpha": 0},
+        {"theta": 0, "d": 0, "a": 0.10935, "alpha": np.pi},
+        {"theta": 0, "d": 0, "a": 0.10051, "alpha": 0},
         {"theta": -np.pi/2, "d": 0, "a": 0, "alpha": -np.pi/2},
         {"theta": 0, "d": 0.05815, "a": 0, "alpha": 0},
     ]
