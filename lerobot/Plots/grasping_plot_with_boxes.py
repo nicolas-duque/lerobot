@@ -38,8 +38,12 @@ def get_episode_data_index(
 # Forward kinematics function
 def forward_kinematics(joint_angles,d,a,alpha):
     T = np.eye(4)
+    frame = np.eye(4)
     joint_angles_rad = np.radians(joint_angles)
+    joint_angles_rad[1] -= 0.136
+    joint_angles_rad[2] += 0.162
     joint_angles_rad[3] -= np.pi/2
+    joint_angles_rad[4] *= -1 
     for i in range(5):
         theta = joint_angles_rad[i]
         ct, st = np.cos(theta), np.sin(theta)
@@ -51,14 +55,9 @@ def forward_kinematics(joint_angles,d,a,alpha):
             [0, 0, 0, 1]
         ])
         T = T@Ti # Multiply transformation matrices
+        
     yaw = np.degrees(np.arctan2(T[1, 0], T[0, 0]))
-
-    surface_normal = np.array([0,0,1])
-    approach_vector = T[:3,2]
-    cos_theta = np.dot(surface_normal,approach_vector)/(np.linalg.norm(surface_normal)*np.linalg.norm(approach_vector))
-    theta_tilt = np.degrees(np.arccos(np.clip(cos_theta,-1.0,1.0)))
-
-    return T[:3, 3],theta_tilt  # Extract position (x, y, z)
+    return T[:3, 3],yaw#theta_tilt  # Extract position (x, y, z)
 
 def compute_r2(q_d, q_a):
     mean_qd = np.mean(q_d)  # Mean of desired trajectory per joint
@@ -71,13 +70,6 @@ def compute_r2(q_d, q_a):
 @parser.wrap()
 def main(cfg: ControlPipelineConfig):
     
-    dh_params_new = [
-        {"theta": 0, "d": 0.0563, "a": 0, "alpha": np.pi/2},
-        {"theta": 0, "d": 0, "a": 0.108347, "alpha": np.pi},
-        {"theta": 0, "d": 0, "a": 0.090467, "alpha": 0},
-        {"theta": -np.pi/2, "d": 0, "a": 0, "alpha": -np.pi/2},
-        {"theta": 0, "d": 0.05815, "a": 0, "alpha": 0},
-    ]
 
     colors = [
     "#e41a1c",  # Red
@@ -109,6 +101,10 @@ def main(cfg: ControlPipelineConfig):
 
     d = [0.0563, 0.0, 0.0, 0.0, 0.05815]
     a = [0.0, 0.108347, 0.090467, 0.0, 0.0]
+    alpha = [np.pi/2, np.pi, 0, -np.pi/2, 0]
+
+    d = [0.0563, 0.0, 0.0, 0.0, 0.05815]
+    a = [0.0, 0.10935, 0.10051, 0.0, 0.0]
     alpha = [np.pi/2, np.pi, 0, -np.pi/2, 0]
 
     init_logging()
@@ -156,9 +152,8 @@ def main(cfg: ControlPipelineConfig):
         if grasp_idx is None:
             grasp_idx = next((i for i, obs in enumerate(obs_set) if obs[-1] < 40), None)
 
-        fk,yaw = forward_kinematics(obs_set[grasp_idx][-6:],d,a,alpha)
+        fk, yaw = forward_kinematics(obs_set[grasp_idx][-6:],d,a,alpha)
         obs_grasp.append(fk)
-        yaw2 = obs_set[grasp_idx][-2]
         grasp_angle.append(yaw)
 
     
@@ -168,8 +163,6 @@ def main(cfg: ControlPipelineConfig):
 
     fig, axs = plt.subplots(1, 1, figsize=(10, 15))
 
-    eps = int(dataset.meta.total_episodes/13)
-    d_avg = []
     axs.scatter(obs_grasp[:,1], obs_grasp[:, 0],color=colors[1])
     for i in range(dataset.meta.total_episodes-1):
         color=colors[0]
@@ -193,7 +186,7 @@ def main(cfg: ControlPipelineConfig):
     #axs.set_ylim(0.10,0.15)
     #axs.set_xlim(-0.105,0.085)
 
-    plt.show()
+    fig.show()
 
 
 
