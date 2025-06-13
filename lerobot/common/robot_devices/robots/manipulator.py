@@ -563,7 +563,7 @@ class ManipulatorRobot:
 
         # Get robot EE position (Forward Kinematics) - only for Koch robot
         if self.robot_type == "koch":
-            ee_pos = self.compute_fk(state)
+            ee_pos, yaw = self.compute_fk(state)
 
         # Capture images from cameras
         images = {}
@@ -581,10 +581,17 @@ class ManipulatorRobot:
         ############################################################################################
         # Add EE position to observation
         if self.robot_type == "koch":
-            obs_dict["observation.state"] = torch.cat([ee_pos, state], dim=-1)
+            obs_dict["observation.state"] = torch.cat([state], dim=-1)
             obs_dict["observation.state"] = obs_dict["observation.state"].to(torch.float32)
-            print(obs_dict["observation.state"].dtype)
+
+            obs_dict["observation.ee_pos"] = torch.cat([ee_pos, yaw], dim=0)
+            obs_dict["observation.ee_pos"] = obs_dict["observation.state"].to(torch.float32)
+
+            obs_dict["observation.d_pos"] = torch.cat([ee_pos, state], dim=-1) #TODO: FIND HOW TO KNOW THIS VALUE
+            obs_dict["observation.d_pos"] = obs_dict["observation.state"].to(torch.float32)
+            
         ############################################################################################
+    
 
         for name in self.cameras:
             obs_dict[f"observation.images.{name}"] = images[name]
@@ -679,5 +686,6 @@ class ManipulatorRobot:
         for i, params in enumerate(self.dh_params):
             Ti = self.dh_transform(state[i], params["d"], params["a"], params["alpha"])
             T = T@Ti # Multiply transformation matrices
+            yaw = np.degrees(np.arctan2(T[1, 0], T[0, 0]))
 
-        return torch.tensor((T[:3, 3]))  # Extract position (x, y, z)
+        return torch.tensor((T[:3, 3])),torch.tensor([yaw])  # Extract position (x, y, z)

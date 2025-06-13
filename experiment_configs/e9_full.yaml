@@ -1,12 +1,11 @@
 dataset:
   repo_id: nduque/robustness_e9_3
-  root: /lerobot/datasets/robustness_e9_3
 
 policy:
   type: act
 
-output_dir: outputs/train/act_robustness_e9_3_full
-job_name: robustness_e9_3_full
+output_dir: outputs/train/act_robustness_e9_3_full_dp_local
+job_name: robustness_e9_3_full_dp_local
 
 wandb:
   enable: true
