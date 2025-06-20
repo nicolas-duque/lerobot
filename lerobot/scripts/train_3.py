@@ -132,7 +132,12 @@ def train(cfg: TrainPipelineConfig):
 
     ####################################################################
     print(dataset.hf_dataset[0])
-    grasp_vals = get_grasping_idxs(dataset.hf_dataset.select_columns(["observation.state","episode_index"]),dataset.num_episodes)
+    episodes=[]
+    if dataset.episodes is None:
+        episodes = range(dataset.num_episodes)
+    else:
+        episodes = dataset.episodes
+    grasp_vals = get_grasping_idxs(dataset.hf_dataset.select_columns(["observation.state","episode_index"]),episodes)
     
     dataset.hf_dataset = dataset.hf_dataset.map( lambda data: add_fk(data, grasp_vals))
 
@@ -421,13 +426,13 @@ def add_fk(data, grasp_vals):
         fk,yaw = compute_fk(data["observation.state"])
         # Create new column
         data["observation.ee_pos"] = torch.cat([fk, yaw], dim=0)
-        data["observation.d_pos"] = torch.tensor([grasp_vals[data["episode_index"]]])
+        data["observation.d_pos"] = torch.tensor([grasp_vals[int(data["episode_index"])]])
         
         return data
 
-def get_grasping_idxs(dataset,num_episodes):
-    grasp_vals = []
-    for i in range(num_episodes):
+def get_grasping_idxs(dataset,episodes):
+    grasp_vals = {}
+    for i in episodes:
         ep_vals = dataset.filter(lambda x: x["episode_index"] == i)
         grasp_idx = next((j for j, obs in enumerate(ep_vals["observation.state"]) if obs[-1] < 30), None)
 
@@ -438,7 +443,7 @@ def get_grasping_idxs(dataset,num_episodes):
             grasp_vals.append([torch.tensor(0.0, dtype=torch.float64), torch.tensor(0.0, dtype=torch.float64), torch.tensor(0.0, dtype=torch.float64)])
         else:
             fk, yaw = compute_fk(ep_vals["observation.state"][grasp_idx])
-            grasp_vals.append([fk[0], fk[1],yaw[0]])
+            grasp_vals[i] = [fk[0], fk[1],yaw[0]]
 
     return grasp_vals
 ##################################################################################################  
