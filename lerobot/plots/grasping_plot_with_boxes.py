@@ -100,10 +100,6 @@ def main(cfg: ControlPipelineConfig):
     ]
 
     d = [0.0563, 0.0, 0.0, 0.0, 0.05815]
-    a = [0.0, 0.108347, 0.090467, 0.0, 0.0]
-    alpha = [np.pi/2, np.pi, 0, -np.pi/2, 0]
-
-    d = [0.0563, 0.0, 0.0, 0.0, 0.05815]
     a = [0.0, 0.10935, 0.10051, 0.0, 0.0]
     alpha = [np.pi/2, np.pi, 0, -np.pi/2, 0]
 
@@ -164,20 +160,26 @@ def main(cfg: ControlPipelineConfig):
     fig, axs = plt.subplots(1, 1, figsize=(10, 15))
 
     axs.scatter(obs_grasp[:,1], obs_grasp[:, 0],color=colors[1])
-    for i in range(dataset.meta.total_episodes-1):
+    for i in range(dataset.meta.total_episodes):
         color=colors[0]
         
         bottom_left = (obs_grasp[i,1]-0.0125,obs_grasp[i,0]-0.0125)
-        
-        print(grasp_angle[i])
-        #axs.scatter(obs_grasp[i,1], obs_grasp[i,0], color=color, marker='x', s=100)
-
         rec = plt.Rectangle(bottom_left,0.025,0.025, ec=color, fc='none', angle = grasp_angle[i], rotation_point="center")
         axs.add_patch(rec)
-        #axs.text(box_pos_avg_e6[i,0],box_pos_avg_e6[i,1]-0.004,str(dist_to_avg),ha='center')
 
     #axs.hist2d(obs_grasp[:, 1],obs_grasp[:, 0], bins=5)
 
+    positions = 25
+    eps = int(dataset.meta.total_episodes/positions)
+    avgs = []
+    for i in range(positions):
+        avg_y = float(round(np.mean(obs_grasp[i*eps:(i+1)*eps, 1]),4))
+        avg_x = float(round(np.mean(obs_grasp[i*eps:(i+1)*eps, 0]),4))
+        avg_yaw = float(round(np.mean(grasp_angle[i*eps:(i+1)*eps]),4))
+
+        avgs.append([avg_y, avg_x, avg_yaw])
+        print([avg_y, avg_x, avg_yaw])
+        #print(avgs)
 
     axs.set_xlabel("Y Position")
     axs.set_ylabel("X Position")

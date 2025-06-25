@@ -170,6 +170,7 @@ class ManipulatorRobot:
         # DH params for FK (Koch robot)
         if self.robot_type == "koch":
             self.dh_params = self.config.dh_params
+            self.d_pos = self.config.d_positions
 
     def get_motor_names(self, arm: dict[str, MotorsBus]) -> list:
         return [f"{arm}_{motor}" for arm, bus in arm.items() for motor in bus.motors]
@@ -190,6 +191,7 @@ class ManipulatorRobot:
     def motor_features(self) -> dict:
         action_names = self.get_motor_names(self.leader_arms)
         state_names = self.get_motor_names(self.leader_arms)
+        
         return {
             "action": {
                 "dtype": "float32",
@@ -208,11 +210,11 @@ class ManipulatorRobot:
                 "shape": (4,),
                 "names": ["x", "y", "z", "yaw"],
             },
-            "observation.d_pos": {
-                "dtype": "float32",
-                "shape": (3,),
-                "names": ["x", "y", "yaw"],
-            },
+            #"observation.d_pos": {
+            #    "dtype": "float32",
+            #    "shape": (1,3),
+            #    "names": ["x", "y", "yaw"],
+            #},
         }
 
     @property
@@ -539,7 +541,7 @@ class ManipulatorRobot:
 
         return obs_dict, action_dict
 
-    def capture_observation(self):
+    def capture_observation(self,total_episodes = None,episode_idx = None) -> dict[str, torch.Tensor]:
         """The returned observations do not have a batch dimension."""
         if not self.is_connected:
             raise RobotDeviceNotConnectedError(
@@ -560,10 +562,7 @@ class ManipulatorRobot:
             if name in follower_pos:
                 state.append(follower_pos[name])
         state = torch.cat(state)
-
-        # Get robot EE position (Forward Kinematics) - only for Koch robot
-        if self.robot_type == "koch":
-            ee_pos, yaw = self.compute_fk(state)
+            
 
         # Capture images from cameras
         images = {}
@@ -580,15 +579,21 @@ class ManipulatorRobot:
 
         ############################################################################################
         # Add EE position to observation
-        if self.robot_type == "koch":
-            obs_dict["observation.state"] = torch.cat([state], dim=-1)
-            obs_dict["observation.state"] = obs_dict["observation.state"].to(torch.float32)
+        if self.robot_type == "koch" and episode_idx is not None:
+            ee_pos, yaw = self.compute_fk(state)
 
             obs_dict["observation.ee_pos"] = torch.cat([ee_pos, yaw], dim=0)
-            obs_dict["observation.ee_pos"] = obs_dict["observation.state"].to(torch.float32)
+            obs_dict["observation.ee_pos"] = obs_dict["observation.ee_pos"].to(torch.float32)
+            idx = episode_idx // int(total_episodes/len(self.d_pos))
 
-            obs_dict["observation.d_pos"] = torch.cat([ee_pos, state], dim=-1) #TODO: FIND HOW TO KNOW THIS VALUE
-            obs_dict["observation.d_pos"] = obs_dict["observation.state"].to(torch.float32)
+            if "observation.d_pos" in obs_dict:
+                d_pos = torch.tensor(self.d_pos[idx])
+                obs_dict["observation.d_pos"] = d_pos.to(torch.float32).reshape(1,3)
+                print("pos_idx: ", idx, "ep_idx: ", episode_idx)
+            else:
+                #del self.features["observation.d_pos"]
+                #del self.motor_features["observation.d_pos"]
+                print("pos_idx: ", idx, "ep_idx: ", episode_idx)
             
         ############################################################################################
     

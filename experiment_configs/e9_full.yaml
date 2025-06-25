@@ -4,8 +4,8 @@ dataset:
 policy:
   type: act
 
-output_dir: outputs/train/act_robustness_e9_3_full_dp_local
-job_name: robustness_e9_3_full_dp_local
+output_dir: outputs/train/act_robustness_e9_3_full_fk_l
+job_name: robustness_e9_3_full_fk_l
 
 wandb:
   enable: true

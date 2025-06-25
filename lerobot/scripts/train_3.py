@@ -426,7 +426,7 @@ def add_fk(data, grasp_vals):
         fk,yaw = compute_fk(data["observation.state"])
         # Create new column
         data["observation.ee_pos"] = torch.cat([fk, yaw], dim=0)
-        data["observation.d_pos"] = torch.tensor([grasp_vals[int(data["episode_index"])]])
+        data["observation.d_pos"] = torch.tensor(grasp_vals[int(data["episode_index"])])
         
         return data
 

@@ -196,6 +196,7 @@ def record_episode(
     policy,
     fps,
     single_task,
+    total_episodes
 ):
     control_loop(
         robot=robot,
@@ -207,6 +208,7 @@ def record_episode(
         fps=fps,
         teleoperate=policy is None,
         single_task=single_task,
+        total_episodes=total_episodes,
     )
 
 
@@ -221,6 +223,7 @@ def control_loop(
     policy: PreTrainedPolicy = None,
     fps: int | None = None,
     single_task: str | None = None,
+    total_episodes: int | None = None,
 ):
     # TODO(rcadene): Add option to record logs
     if not robot.is_connected:
@@ -249,10 +252,10 @@ def control_loop(
         if teleoperate:
             observation, action = robot.teleop_step(record_data=True)
         else:
-            observation = robot.capture_observation()
-            action = None
 
             if policy is not None:
+                observation = robot.capture_observation(total_episodes,dataset.num_episodes)
+                action = None
                 pred_action = predict_action(
                     observation, policy, get_safe_torch_device(policy.config.device), policy.config.use_amp
                 )
@@ -260,6 +263,9 @@ def control_loop(
                 # so action actually sent is saved in the dataset.
                 action = robot.send_action(pred_action)
                 action = {"action": action}
+            else:
+                observation = robot.capture_observation()
+                action = None
 
         if dataset is not None:
             frame = {**observation, **action, "task": single_task}

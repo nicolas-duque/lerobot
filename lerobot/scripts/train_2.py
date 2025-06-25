@@ -133,12 +133,19 @@ def train(cfg: TrainPipelineConfig):
     ####################################################################
     print(dataset.hf_dataset[0])
     dataset.hf_dataset = dataset.hf_dataset.map(add_fk)
-    dataset.meta.features["observation.state"]["shape"] = (dataset.meta.features["observation.state"]["shape"][0] + 3, )
 
-    dataset.meta.stats["observation.state"]["mean"]  = np.mean(dataset.hf_dataset["observation.state"], axis=0)
-    dataset.meta.stats["observation.state"]["std"]  = np.std(dataset.hf_dataset["observation.state"], axis=0)
-    dataset.meta.stats["observation.state"]["min"]  = np.min(dataset.hf_dataset["observation.state"], axis=0)
-    dataset.meta.stats["observation.state"]["max"]  = np.max(dataset.hf_dataset["observation.state"], axis=0)
+    dataset.meta.features["observation.ee_pos"] = {
+                "dtype": "float32",
+                "shape": (4,),
+                "names": ["x", "y", "z", "yaw"],
+            }
+
+    dataset.meta.stats["observation.ee_pos"] = {
+        "mean": np.mean(dataset.hf_dataset["observation.ee_pos"], axis=0),
+        "std": np.std(dataset.hf_dataset["observation.ee_pos"], axis=0),
+        "min": np.min(dataset.hf_dataset["observation.ee_pos"], axis=0),
+        "max": np.max(dataset.hf_dataset["observation.ee_pos"], axis=0),
+    }
 
     print(dataset.hf_dataset[0])
 
@@ -364,7 +371,15 @@ def dh_transform(theta, d, a, alpha):
     ])
 
 # Function to compute joint positions based on DH parameters
-def compute_fk(dh_params,state):
+def compute_fk(state):
+    dh_params = [
+        {"theta": 0, "d": 0.0563, "a": 0, "alpha": np.pi/2},
+        {"theta": -0.136, "d": 0, "a": 0.10935, "alpha": np.pi},
+        {"theta": +0.162, "d": 0, "a": 0.10051, "alpha": 0},
+        {"theta": -np.pi/2, "d": 0, "a": 0, "alpha": -np.pi/2},
+        {"theta": 0, "d": 0.05815, "a": 0, "alpha": 0},
+    ]
+    
     T = np.eye(4)
     state = np.radians(state)
     state[1] -= 0.136
@@ -376,21 +391,18 @@ def compute_fk(dh_params,state):
         Ti = dh_transform(state[i], params["d"], params["a"], params["alpha"])
         T = T@Ti # Multiply transformation matrices
 
-    return torch.tensor(T[:3, 3])  # Extract position (x, y, z)
+    yaw = np.degrees(np.arctan2(T[1, 0], T[0, 0]))
+    return torch.tensor(T[:3, 3]), torch.tensor([yaw])  # Extract position (x, y, z)
     
 def add_fk(data):
-        dh_params = [
-        {"theta": 0, "d": 0.0563, "a": 0, "alpha": np.pi/2},
-        {"theta": -0.136, "d": 0, "a": 0.10935, "alpha": np.pi},
-        {"theta": +0.162, "d": 0, "a": 0.10051, "alpha": 0},
-        {"theta": -np.pi/2, "d": 0, "a": 0, "alpha": -np.pi/2},
-        {"theta": 0, "d": 0.05815, "a": 0, "alpha": 0},
-    ]
+        
         # Calculate FK for each joint
-        fk = compute_fk(dh_params, data["observation.state"])
-        # Augment observation state with FK
-        data["observation.state"] = torch.cat([fk, data["observation.state"]], dim=-1)
+        fk,yaw = compute_fk(data["observation.state"])
+        # Create new column
+        data["observation.ee_pos"] = torch.cat([fk, yaw], dim=0)
+
         return data
+
 ##################################################################################################  
 if __name__ == "__main__":
     init_logging()
