@@ -440,7 +440,7 @@ def get_grasping_idxs(dataset,episodes):
             grasp_idx = next((j for j, obs in enumerate(ep_vals["observation.state"]) if obs[-1] < 40), None)
         
         if grasp_idx is None:
-            grasp_vals.append([torch.tensor(0.0, dtype=torch.float64), torch.tensor(0.0, dtype=torch.float64), torch.tensor(0.0, dtype=torch.float64)])
+            grasp_vals[i] = [torch.tensor(0.0, dtype=torch.float64), torch.tensor(0.0, dtype=torch.float64), torch.tensor(0.0, dtype=torch.float64)]
         else:
             fk, yaw = compute_fk(ep_vals["observation.state"][grasp_idx])
             grasp_vals[i] = [fk[0], fk[1],yaw[0]]

@@ -212,7 +212,7 @@ class ManipulatorRobot:
             },
             #"observation.d_pos": {
             #    "dtype": "float32",
-            #    "shape": (1,3),
+            #    "shape": (3,),
             #    "names": ["x", "y", "yaw"],
             #},
         }
@@ -588,7 +588,7 @@ class ManipulatorRobot:
 
             if "observation.d_pos" in obs_dict:
                 d_pos = torch.tensor(self.d_pos[idx])
-                obs_dict["observation.d_pos"] = d_pos.to(torch.float32).reshape(1,3)
+                obs_dict["observation.d_pos"] = d_pos.to(torch.float32)
                 print("pos_idx: ", idx, "ep_idx: ", episode_idx)
             else:
                 #del self.features["observation.d_pos"]
