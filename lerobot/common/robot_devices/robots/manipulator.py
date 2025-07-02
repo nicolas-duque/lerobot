@@ -200,16 +200,14 @@ class ManipulatorRobot:
             },
             "observation.state": {
                 "dtype": "float32",
-                #"shape": (len(state_names)+3,),
                 "shape": (len(state_names),),
-                #"names": ["x", "y", "z"].append(state_names),
                 "names": state_names,
             },
-            "observation.ee_pos": {
-                "dtype": "float32",
-                "shape": (4,),
-                "names": ["x", "y", "z", "yaw"],
-            },
+            #"observation.ee_pos": {
+            #    "dtype": "float32",
+            #    "shape": (4,),
+            #    "names": ["x", "y", "z", "yaw"],
+            #},
             #"observation.d_pos": {
             #    "dtype": "float32",
             #    "shape": (3,),
@@ -582,14 +580,14 @@ class ManipulatorRobot:
         if self.robot_type == "koch" and episode_idx is not None:
             ee_pos, yaw = self.compute_fk(state)
 
-            obs_dict["observation.ee_pos"] = torch.cat([ee_pos, yaw], dim=0)
-            obs_dict["observation.ee_pos"] = obs_dict["observation.ee_pos"].to(torch.float32)
+            #obs_dict["observation.ee_pos"] = torch.cat([ee_pos, yaw], dim=0)
+            #obs_dict["observation.ee_pos"] = obs_dict["observation.ee_pos"].to(torch.float32)
             idx = episode_idx // int(total_episodes/len(self.d_pos))
 
             if "observation.d_pos" in obs_dict:
                 d_pos = torch.tensor(self.d_pos[idx])
                 obs_dict["observation.d_pos"] = d_pos.to(torch.float32)
-                print("pos_idx: ", idx, "ep_idx: ", episode_idx)
+                print("pos_idx: ", idx, "ep_idx: ", episode_idx, "d_pos: ", d_pos)
             else:
                 #del self.features["observation.d_pos"]
                 #del self.motor_features["observation.d_pos"]
