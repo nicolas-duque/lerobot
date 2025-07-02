@@ -162,27 +162,37 @@ def train(cfg: TrainPipelineConfig):
     logging.info(f"{num_learnable_params=} ({format_big_number(num_learnable_params)})")
     logging.info(f"{num_total_params=} ({format_big_number(num_total_params)})")
 
-    # create dataloader for offline training
-    if hasattr(cfg.policy, "drop_n_last_frames"):
-        shuffle = False
-        sampler = EpisodeAwareSampler(
-            dataset.episode_data_index,
-            drop_n_last_frames=cfg.policy.drop_n_last_frames,
-            shuffle=True,
-        )
-    else:
-        shuffle = True
-        sampler = None
+    # Episode-level split 
+    # #################################################################################
+    num_eps = len(dataset.episode_data_index["from"])
+    val_size = 1#int(num_eps * 0.1)
+    g = torch.Generator().manual_seed(cfg.seed or 42)
+    shuffled = torch.randperm(num_eps, generator=g).tolist()
+    split_episodes = {"train": shuffled[:-val_size], "val": shuffled[-val_size:]}
 
-    dataloader = torch.utils.data.DataLoader(
-        dataset,
-        num_workers=cfg.num_workers,
-        batch_size=cfg.batch_size,
-        shuffle=shuffle,
-        sampler=sampler,
-        pin_memory=device.type != "cpu",
-        drop_last=False,
-    )
+    # Build datasets and dataloaders
+    dataloaders = {}
+    for split, eps in split_episodes.items():
+        indices = list(
+            EpisodeAwareSampler(
+                dataset.episode_data_index,
+                episode_indices_to_use=eps,
+                drop_n_last_frames=getattr(cfg.policy, "drop_n_last_frames", 0),
+                shuffle=True,
+            )
+        )
+        subset = torch.utils.data.Subset(dataset, indices)
+        dataloaders[split] = torch.utils.data.DataLoader(
+            subset,
+            batch_size=cfg.batch_size,
+            num_workers=cfg.num_workers,
+            shuffle=True,
+            pin_memory=device.type != "cpu",
+            drop_last=(split == "train"),
+        )
+
+    dataloader = dataloaders["train"]
+    val_dataloader = dataloaders["val"]
     dl_iter = cycle(dataloader)
 
     policy.train()
@@ -193,6 +203,8 @@ def train(cfg: TrainPipelineConfig):
         "lr": AverageMeter("lr", ":0.1e"),
         "update_s": AverageMeter("updt_s", ":.3f"),
         "dataloading_s": AverageMeter("data_s", ":.3f"),
+        "val_loss": AverageMeter("val_loss", ":.4f"),
+        "val_s": AverageMeter("val_s", ":.4f"),
         
     }
 
@@ -201,7 +213,7 @@ def train(cfg: TrainPipelineConfig):
     )
 
     logging.info("Start offline training on a fixed dataset")
-    for _ in range(step, cfg.steps):
+    for current_step in range(step, cfg.steps):
         start_time = time.perf_counter()
         batch = next(dl_iter)
         train_tracker.dataloading_s = time.perf_counter() - start_time
@@ -223,11 +235,49 @@ def train(cfg: TrainPipelineConfig):
 
         # Note: eval and checkpoint happens *after* the `step`th training update has completed, so we
         # increment `step` here.
-        step += 1
+        step = current_step + 1
         train_tracker.step()
         is_log_step = cfg.log_freq > 0 and step % cfg.log_freq == 0
         is_saving_step = step % cfg.save_freq == 0 or step == cfg.steps
         is_eval_step = cfg.eval_freq > 0 and step % cfg.eval_freq == 0
+
+        #########################################################################################
+        is_validation_step = (
+            val_dataloader is not None and cfg.validation_freq > 0 and step % cfg.validation_freq == 0
+        )
+
+        # Integrate validation loop directly here
+        if is_validation_step:
+            validation_start_time = time.perf_counter()
+
+            policy.eval()
+            total_val_loss = 0.0
+            fraction = 0.05  # only sample 8% of val dataset. Hardcoded for simplicity.
+            num_batches_to_run = int(fraction * len(val_dataloader))
+            with torch.no_grad():
+                for batch_idx, val_batch in enumerate(val_dataloader):
+                    if batch_idx >= num_batches_to_run:
+                        break
+                    for key in val_batch:
+                        if isinstance(val_batch[key], torch.Tensor):
+                            val_batch[key] = val_batch[key].to(device, non_blocking=True)
+                    with torch.autocast(device_type=device.type, enabled=cfg.policy.use_amp):
+                        loss, _ = policy.forward(val_batch)
+                    if torch.isfinite(loss):
+                        total_val_loss += loss.item()
+
+            policy.train()
+            avg_val_loss = total_val_loss / num_batches_to_run
+            train_tracker.metrics["val_loss"].reset()
+            train_tracker.metrics["val_loss"].update(avg_val_loss)
+
+            validation_duration = time.perf_counter() - validation_start_time
+            amortized_val_time = validation_duration / cfg.validation_freq
+
+            train_tracker.metrics["val_s"].reset()
+            train_tracker.metrics["val_s"].update(amortized_val_time)
+
+        ###########################################################################################
 
         if is_log_step:
             logging.info(train_tracker)

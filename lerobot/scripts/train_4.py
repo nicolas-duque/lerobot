@@ -131,6 +131,8 @@ def train(cfg: TrainPipelineConfig):
     dataset = make_dataset(cfg)
 
     ####################################################################
+    del dataset.features["observation.images.front"]
+    del dataset.features["observation.images.above"]
     print(dataset.hf_dataset[0])
     episodes=[]
     if dataset.episodes is None:
