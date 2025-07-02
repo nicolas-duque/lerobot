@@ -2,6 +2,7 @@ import logging
 from dataclasses import asdict, dataclass
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
 from mpl_toolkits.mplot3d import Axes3D
 from pprint import pformat
 from copy import copy
@@ -190,27 +191,71 @@ def main(cfg: ControlPipelineConfig):
                                  [-0.0025, 0.1188, 3.8189],[0.0722, 0.12, 0.7847],[-0.0396, 0.0861, 4.738],
                                  [0.0366, 0.0868, -1.0705],[-0.0696, 0.0526, 4.0597],[-0.0021, 0.053, 1.3559],[0.0694, 0.0554, -0.1613]])
     
-    eps = int(dataset.meta.total_episodes/13)
-    for i in range(13):
+    box_pos_avg_e9_all = [[-0.0809, 0.195, 8.8293],[-0.0415, 0.1988, 8.2231],[-0.0006, 0.1983, 6.3474],[0.0388, 0.1989, 4.407],[0.0805, 0.2004, 2.3005],
+                   [-0.0758, 0.1543, 10.03],[-0.0408, 0.1563, 8.1177],[-0.0031, 0.1565, 9.1966],[0.0378, 0.1605, 2.4887],[0.0759, 0.1588, 3.1575],
+                   [-0.075, 0.1187, 6.3325],[-0.0374, 0.12, 6.469],[-0.0031, 0.1212, 5.7372],[0.0338, 0.1231, 6.6873],[0.0757, 0.122, 3.5465],
+                   [-0.0726, 0.0826, 5.5792],[-0.0389, 0.0837, 5.1754],[-0.0025, 0.0842, 3.2955],[0.0345, 0.0896, 3.8578],[0.071, 0.0891, 2.3324],
+                   [-0.0718, 0.0495, 2.1085],[-0.0393, 0.0523, 5.1431],[-0.0042, 0.0541, 3.0332],[0.036, 0.0541, -1.2648],[0.0695, 0.057, -1.611]]
+    
+    success = np.array([1,1,1,1,1,1,1, #1
+                        1,1,1,1,1,0,0, #2
+                        1,1,1,1,1,1,1, #3
+                        1,1,0,0,1,1,0, #4
+                        1,1,1,1,1,1,1, #5
+                        0,0,0,1,0,0,0, #6
+                        1,1,1,1,1,1,1, #7
+                        1,1,0,0,1,1,0, #8
+                        1,1,1,1,1,1,1, #9
+                        1,1,1,1,0,1,0, #10
+                        1,1,1,1,1,1,1, #11
+                        0,1,0,1,0,1,0, #12 
+                        1,1,1,1,1,1,1, #13 
+                        0,0,0,0,1,0,1, #14
+                        1,1,1,1,1,1,1, #15
+                        1,1,1,0,1,1,0, #16
+                        1,1,1,1,1,1,1, #17
+                        1,1,1,1,1,1,1, #18
+                        1,1,1,1,1,1,1, #19
+                        1,0,0,1,0,1,1, #20
+                        1,1,1,1,1,1,1, #21
+                        0,0,0,0,0,0,0, #22
+                        1,1,1,1,1,1,1, #23
+                        0,0,0,0,0,0,0, #24
+                        1,1,1,1,1,1,1  #25
+                        ]) 
+    
+    eps = int(dataset.meta.total_episodes/25)
+    d_xy = []
+    box_pos_avg_e9_all = np.array(box_pos_avg_e9_all)
+    for i in range(25):
         color=colors[i]
+
+        box_pos = box_pos_avg_e9_all[i]
         
         avg_y = float(round(np.mean(obs_grasp[i*eps:(i+1)*eps, 1]),4))
         avg_x = float(round(np.mean(obs_grasp[i*eps:(i+1)*eps, 0]),4))
         avg_yaw = float(round(np.mean(grasp_angle[i*eps:(i+1)*eps]),4))
         print([avg_y, avg_x, avg_yaw])
-
+        ep_dx = obs_grasp[i*eps:(i+1)*eps, 0] - box_pos_avg_e9_all[i,1]
+        ep_dy = obs_grasp[i*eps:(i+1)*eps, 1] - box_pos_avg_e9_all[i,0]
+        d_xy.append([ep_dx,ep_dy])
         #dist_to_avg = round(np.linalg.norm([box_pos_avg_e8[i,0]-avg_y, box_pos_avg_e8[i,1]-avg_x]),3)
         #print("Block " +  str(i) + ": ", str(avg_y) + ", " + str(avg_x))
-        axs.scatter(obs_grasp[i*eps:(i+1)*eps, 1], obs_grasp[i*eps:(i+1)*eps, 0],color=color)
+        for j in range(eps):
+            if success[i*eps+j] == 0:
+                fc = 'none'
+            else:
+                fc = color
+            axs.scatter(obs_grasp[i*eps+j,1], obs_grasp[i*eps+j, 0],color=color, fc=fc)
+        #axs.scatter(obs_grasp[i*eps:(i+1)*eps, 1], obs_grasp[i*eps:(i+1)*eps, 0],color=color, fc=)
         axs.scatter(avg_y, avg_x, color=color, marker='x', s=100)
 
-        bottom_left = (avg_y-0.0125,avg_x-0.0125)
-        rec = plt.Rectangle(bottom_left,0.025,0.025, ec=color, fc='none', angle = avg_yaw, rotation_point="center")
+        bottom_left = (box_pos[0]-0.0125,box_pos[1]-0.0125)
+        rec = plt.Rectangle(bottom_left,0.025,0.025, ec=color, fc='none', angle = box_pos[2], rotation_point="center")
         axs.add_patch(rec)
 
-        #axs.scatter(box_pos_avg_e8[i, 0], box_pos_avg_e8[i, 1], color=color, marker='s', s=20000, facecolors='none')
         #axs.text(box_pos_avg_e8[i,0],box_pos_avg_e8[i,1]-0.004,str(dist_to_avg),ha='center')
-
+    d_xy = np.array(d_xy)
 
     axs.set_xlabel("Y Position")
     axs.set_ylabel("X Position")
@@ -219,6 +264,119 @@ def main(cfg: ControlPipelineConfig):
     #axs.set_ylim(0.04,0.22)
     #axs.set_xlim(-0.1,0.1)
 
+    fig2, axs2 = plt.subplots(5,5, figsize=(15, 15))
+    fig3, axs3 = plt.subplots(5,5, figsize=(15, 15))
+    fig4, axs4 = plt.subplots(5,5, figsize=(15, 15))
+
+    # Define bin width
+    bin_width = 0.005
+
+    for i in range(25):
+        # Compute min and max of data rounded to nearest bin edge
+        bins = []  # Initialize bins for x and y errors
+        for j in range(2):
+        # Compute min and max of data rounded to nearest bin edge
+            min_edge = np.floor(d_xy[i,j,:].min() / bin_width) * bin_width
+            max_edge = np.ceil(d_xy[i,j,:].max() / bin_width) * bin_width
+            # Create symmetric bin edges centered on 0
+            left = -max(abs(min_edge), abs(max_edge))
+            right = -left
+            #bins.append(np.arange(left, right + bin_width, bin_width))
+            bins.append(np.arange(-0.03, 0.03+bin_width, bin_width))
+
+        axs2[i//5, i%5].hist(d_xy[i,1,:], bins=bins[1])
+        axs2[i//5, i%5].axvline(0, color='red', linestyle='--')
+        axs2[i//5, i%5].axvline(0.0125, color='green', linestyle='--')
+        axs2[i//5, i%5].axvline(-0.01250, color='green', linestyle='--')
+        axs3[i//5, i%5].hist(d_xy[i,0,:], bins=bins[0], orientation='horizontal')
+        axs3[i//5, i%5].axhline(0, color='red', linestyle='--')
+        axs3[i//5, i%5].axhline(0.0125, color='green', linestyle='--')
+        axs3[i//5, i%5].axhline(-0.01250, color='green', linestyle='--')
+        h = axs4[i//5, i%5].hist2d(d_xy[i,1,:],d_xy[i,0,:], bins=bins)
+
+    fig4.colorbar(h[3], ax=axs4, orientation='horizontal', fraction=0.02, pad=0.1)
+    #axs4.set_aspect('equal')
+
+    fig2.suptitle("Horizontal error histogram - Per position")
+    fig3.suptitle("Vertical error histogram - Per position")
+    fig4.suptitle("2D error histogram - Per position")
+
+
+    ##########GENERAL ERROR ANALYSIS##########
+    bins = np.arange(-0.04, 0.04+bin_width, bin_width)
+
+    fig5, axs5 = plt.subplots(2,2, figsize=(15, 15))
+    axs5[0,0].hist(d_xy[:,1,:].flatten(), bins=bins)
+    axs5[0,0].set_title("Horizontal error histogram - all tests")
+    axs5[0,0].axvline(0.0125, color='green', linestyle='--')
+    axs5[0,0].axvline(-0.0125, color='green', linestyle='--')
+
+    axs5[1,0].hist(d_xy[:,0,:].flatten(), bins=bins, orientation='horizontal')
+    axs5[1,0].set_title("Vertical error histogram - all tests")
+    axs5[1,0].axhline(0.0125, color='green', linestyle='--')
+    axs5[1,0].axhline(-0.0125, color='green', linestyle='--')
+
+    h = axs5[0,1].hist2d(d_xy[:,1,:].flatten(), d_xy[:,0,:].flatten(), bins=20)
+    axs5[0,1].set_title("2D error histogram - all tests")
+    fig5.colorbar(h[3], ax=axs5[0,1], orientation='horizontal', fraction=0.1, pad=0.1)
+
+    d_xy_reshape = d_xy.transpose(0,2,1).reshape(-1, 2)
+    axs5[1,1].scatter(
+        d_xy_reshape[success == 0, 1],
+        d_xy_reshape[success == 0, 0],
+        s=15, color='red', label='Failed'
+    )
+
+    axs5[1,1].scatter(
+        d_xy_reshape[success == 1, 1],
+        d_xy_reshape[success == 1, 0],
+        s=15, color='blue', label='Success'
+    )
+
+    axs5[1,1].legend(loc='upper right')
+    axs5[1,1].set_title("2D error scatter - all tests")
+    
+    ############UNKNOWN ERROR ANALYSIS############
+    # Define bin width
+    bins = np.arange(-0.04, 0.04+bin_width, bin_width)
+
+    fig6, axs6 = plt.subplots(2,2, figsize=(15, 15))
+
+    d_xy_unknown = d_xy[1::2,:,:]  # Select every second episode (unknown)
+    axs6[0,0].hist(d_xy_unknown[:,1,:].flatten(), bins=bins)
+    axs6[0,0].set_title("Horizontal error histogram - unknown tests")
+    axs6[0,0].axvline(0.0125, color='green', linestyle='--')
+    axs6[0,0].axvline(-0.0125, color='green', linestyle='--')
+
+    axs6[1,0].hist(d_xy_unknown[:,0,:].flatten(), bins=bins, orientation='horizontal')
+    axs6[1,0].set_title("Vertical error histogram - unknown tests")
+    axs6[1,0].axhline(0.0125, color='green', linestyle='--')
+    axs6[1,0].axhline(-0.0125, color='green', linestyle='--')
+
+    h = axs6[0,1].hist2d(d_xy_unknown[:,1,:].flatten(), d_xy_unknown[:,0,:].flatten(), bins=20)
+    axs6[0,1].set_title("2D error histogram - unknown tests")
+    fig6.colorbar(h[3], ax=axs6[0,1], orientation='horizontal', fraction=0.1, pad=0.1)
+
+    d_xy_reshape = d_xy_unknown.transpose(0,2,1).reshape(-1, 2)
+    succ_reshaped = success.reshape(-1, 7)
+    selected_groups = succ_reshaped[1::2]
+    succ_unknown = selected_groups.reshape(-1)
+    axs6[1,1].scatter(
+        d_xy_reshape[succ_unknown == 0, 1],
+        d_xy_reshape[succ_unknown == 0, 0],
+        s=15, color='red', label='Failed'
+    )
+
+    axs6[1,1].scatter(
+        d_xy_reshape[succ_unknown == 1, 1],
+        d_xy_reshape[succ_unknown == 1, 0],
+        s=15, color='blue', label='Success'
+    )
+
+    axs6[1,1].legend(loc='upper right')
+    axs6[1,1].set_title("2D error scatter - unknown tests")
+    
+    
     plt.show()
 
 
