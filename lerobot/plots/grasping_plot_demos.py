@@ -137,19 +137,11 @@ def main(cfg: ControlPipelineConfig):
     #   Load actions
 
     c_cfg: EvalControlConfig = cfg.control
-    # Create empty dataset or load existing saved episodes
-    if c_cfg.episode is not None:
-        dataset = LeRobotDataset(c_cfg.repo_id, root=c_cfg.root, episodes=[c_cfg.episode])
-        observations = dataset.hf_dataset.select_columns("observation.state")
-        actions = dataset.hf_dataset.select_columns("action")
-        joints = dataset.meta.info['features']['observation.state']['names']
-    else:
-        dataset = LeRobotDataset(c_cfg.repo_id, root=c_cfg.root)
-        observations = dataset.hf_dataset.select_columns("observation.state")['observation.state']
-        actions = dataset.hf_dataset.select_columns("action")['action']
-        joints = dataset.meta.info['features']['observation.state']['names']  
-        episodes = list(range(dataset.meta.total_episodes))
-        episode_data_index=get_episode_data_index(dataset.meta.episodes)
+
+    dataset = LeRobotDataset(c_cfg.repo_id, root=c_cfg.root)
+    observations = dataset.hf_dataset.select_columns("observation.state")['observation.state']
+    episodes = list(range(dataset.meta.total_episodes))
+    episode_data_index=get_episode_data_index(dataset.meta.episodes)
 
     # Loop through dataset
     #   Get observation (poses)
@@ -157,8 +149,7 @@ def main(cfg: ControlPipelineConfig):
     #   Save observation, real action, predicted action in dictionary
     obs_grasp = []
     grasp_angle = []
-    order= list(range(163)) + [175, 164, 165, 166, 176] + list(range(168,175)) #fk local 240k
-    for ep_idx in order:  #episodes:
+    for ep_idx in episodes:
         # Get the episode
         ep_start = int(episode_data_index["from"][ep_idx])
         ep_end = int(episode_data_index["to"][ep_idx])
@@ -182,132 +173,44 @@ def main(cfg: ControlPipelineConfig):
     obs_grasp = np.array(obs_grasp)
 
 
-    fig, axs = plt.subplots(1, 1, figsize=(10, 15))
+    fig, axs = plt.subplots(1, 1, figsize=(10, 10))
 
 
     box_pos = np.array([[-0.085,0.13],[-0.0475,0.13],[-0.01,0.13],[0.0275,0.13],[0.065,0.13]])
-    box_pos_avg_e8 = np.array([[-0.0893, 0.1249],[-0.0468, 0.1293],[-0.01013, 0.1292],[0.03179, 0.1284],[0.0708, 0.1254]])
+    box_pos_avg_e8 = np.array([[-0.0844, 0.1179, 4.2366],[-0.0432, 0.1194, 5.4916],[-0.0092, 0.1179, 6.4004],[0.0291, 0.1177, 2.7933],[0.0658, 0.1165, 1.3591]])
     box_pos_avg_e9_3 = np.array([[-0.0786, 0.193, 5.8925],[-0.0009, 0.1898, 4.1929],[0.0807, 0.1957, 1.2011],
                                  [-0.0393, 0.1533, 5.8473],[0.0353, 0.1567, 1.4479],[-0.0746, 0.1211, 4.0604],
                                  [-0.0025, 0.1188, 3.8189],[0.0722, 0.12, 0.7847],[-0.0396, 0.0861, 4.738],
                                  [0.0366, 0.0868, -1.0705],[-0.0696, 0.0526, 4.0597],[-0.0021, 0.053, 1.3559],[0.0694, 0.0554, -0.1613]])
     
-    box_pos_avg_e9_all = [[-0.0809, 0.195, 8.8293],[-0.0415, 0.1988, 8.2231],[-0.0006, 0.1983, 6.3474],[0.0388, 0.1989, 4.407],[0.0805, 0.2004, 2.3005],
+    box_pos_avg_e9_all = np.array([[-0.0809, 0.195, 8.8293],[-0.0415, 0.1988, 8.2231],[-0.0006, 0.1983, 6.3474],[0.0388, 0.1989, 4.407],[0.0805, 0.2004, 2.3005],
                    [-0.0758, 0.1543, 10.03],[-0.0408, 0.1563, 8.1177],[-0.0031, 0.1565, 9.1966],[0.0378, 0.1605, 2.4887],[0.0759, 0.1588, 3.1575],
                    [-0.075, 0.1187, 6.3325],[-0.0374, 0.12, 6.469],[-0.0031, 0.1212, 5.7372],[0.0338, 0.1231, 6.6873],[0.0757, 0.122, 3.5465],
                    [-0.0726, 0.0826, 5.5792],[-0.0389, 0.0837, 5.1754],[-0.0025, 0.0842, 3.2955],[0.0345, 0.0896, 3.8578],[0.071, 0.0891, 2.3324],
-                   [-0.0718, 0.0495, 2.1085],[-0.0393, 0.0523, 5.1431],[-0.0042, 0.0541, 3.0332],[0.036, 0.0541, -1.2648],[0.0695, 0.057, -1.611]]
+                   [-0.0718, 0.0495, 2.1085],[-0.0393, 0.0523, 5.1431],[-0.0042, 0.0541, 3.0332],[0.036, 0.0541, -1.2648],[0.0695, 0.057, -1.611]])
     
-    success_e9_3_full_dp_cluster_260k = np.array([1,1,1,1,1,1,1, #1
-                                                1,1,1,1,1,0,0, #2
-                                                1,1,1,1,1,1,1, #3
-                                                1,1,0,0,1,1,0, #4
-                                                1,1,1,1,1,1,1, #5
-                                                0,0,0,1,0,0,0, #6
-                                                1,1,1,1,1,1,1, #7
-                                                1,1,0,0,1,1,0, #8
-                                                1,1,1,1,1,1,1, #9
-                                                1,1,1,1,0,1,0, #10
-                                                1,1,1,1,1,1,1, #11
-                                                0,1,0,1,0,1,0, #12 
-                                                1,1,1,1,1,1,1, #13 
-                                                0,0,0,0,1,0,1, #14
-                                                1,1,1,1,1,1,1, #15
-                                                1,1,1,0,1,1,0, #16
-                                                1,1,1,1,1,1,1, #17
-                                                1,1,1,1,1,1,1, #18
-                                                1,1,1,1,1,1,1, #19
-                                                1,0,0,1,0,1,1, #20
-                                                1,1,1,1,1,1,1, #21
-                                                0,0,0,0,0,0,0, #22
-                                                1,1,1,1,1,1,1, #23
-                                                0,0,0,0,0,0,0, #24
-                                                1,1,1,1,1,1,1  #25
-                                                ]) 
-    
-    success_e9_3_full_dp_cluster_200k = np.array([1,1,1,1,1,1,1, #1
-                                                0,0,0,0,0,0,1, #2
-                                                1,1,1,1,1,1,1, #3
-                                                1,1,0,1,1,1,0, #4
-                                                1,1,1,1,1,1,1, #5
-                                                0,0,0,0,0,0,0, #6
-                                                1,1,1,1,1,1,1, #7
-                                                1,1,1,1,1,1,1, #8
-                                                1,1,1,1,1,1,1, #9
-                                                1,0,1,1,1,1,1, #10
-                                                1,1,1,1,1,1,1, #11
-                                                1,0,0,1,0,0,0, #12 
-                                                1,1,1,1,1,1,1, #13 
-                                                0,0,0,0,0,0,1, #14
-                                                1,1,1,1,1,1,1, #15
-                                                1,1,1,1,1,1,1, #16
-                                                1,1,1,1,1,1,1, #17
-                                                1,1,1,1,1,1,1, #18
-                                                1,1,1,1,1,1,1, #19
-                                                1,1,1,1,1,1,1, #20
-                                                1,1,1,1,1,1,1, #21
-                                                0,0,0,0,0,0,0, #22
-                                                1,1,1,1,1,1,1, #23
-                                                0,0,0,0,0,0,0, #24
-                                                1,1,1,1,1,1,1  #25
-                                                ]) 
-    
-    
-    success_e9_3_full_fk_local_240k = np.array([1,1,1,1,1,1,1, #1
-                                                1,1,1,1,1,1,1, #2
-                                                1,1,1,1,1,1,1, #3
-                                                0,0,0,1,0,1,1, #4
-                                                1,1,1,1,1,1,1, #5
-                                                0,0,0,0,0,0,0, #6
-                                                1,1,1,1,1,1,1, #7
-                                                0,1,1,1,1,1,1, #8
-                                                1,1,1,1,1,1,1, #9
-                                                0,0,0,0,0,0,0, #10
-                                                1,1,1,1,1,1,1, #11
-                                                0,0,0,0,0,0,0, #12 
-                                                1,1,1,1,1,1,1, #13 
-                                                0,0,0,1,1,0,1, #14
-                                                1,1,1,1,1,1,1, #15
-                                                0,1,0,1,0,1,0, #16
-                                                1,1,1,1,1,1,1, #17
-                                                1,1,1,1,1,1,1, #18
-                                                1,1,1,1,1,1,1, #19
-                                                1,0,0,0,0,0,1, #20
-                                                1,1,1,1,1,1,1, #21
-                                                0,0,0,0,0,0,0, #22
-                                                1,1,1,1,1,1,1, #23
-                                                0,0,0,0,0,0,0, #24
-                                                1,1,1,1,1,1,1  #25
-                                                ]) 
-
-    
-    success = success_e9_3_full_fk_local_240k
-    eps = int(175/25)
+    box_avg = box_pos_avg_e9_3
+    eps = int(len(episodes)/len(box_avg))
     d_xy = []
     avg_ep = []
-    box_pos_avg_e9_all = np.array(box_pos_avg_e9_all)
-    for i in range(25):
+    for i in range(len(box_avg)):
         color=colors[i]
 
-        box_pos = box_pos_avg_e9_all[i]
+        box_pos = box_avg[i]
         
         avg_y = float(round(np.mean(obs_grasp[i*eps:(i+1)*eps, 1]),4))
         avg_x = float(round(np.mean(obs_grasp[i*eps:(i+1)*eps, 0]),4))
         avg_yaw = float(round(np.mean(grasp_angle[i*eps:(i+1)*eps]),4))
         avg_ep.append([avg_y, avg_x, avg_yaw])
         print([avg_y, avg_x, avg_yaw])
-        ep_dx = obs_grasp[i*eps:(i+1)*eps, 0] - box_pos_avg_e9_all[i,1]
-        ep_dy = obs_grasp[i*eps:(i+1)*eps, 1] - box_pos_avg_e9_all[i,0]
+        ep_dx = obs_grasp[i*eps:(i+1)*eps, 0] - box_avg[i,1]
+        ep_dy = obs_grasp[i*eps:(i+1)*eps, 1] - box_avg[i,0]
         d_xy.append([ep_dx,ep_dy])
         #dist_to_avg = round(np.linalg.norm([box_pos_avg_e8[i,0]-avg_y, box_pos_avg_e8[i,1]-avg_x]),3)
         #print("Block " +  str(i) + ": ", str(avg_y) + ", " + str(avg_x))
-        for j in range(eps):
-            if success[i*eps+j] == 0:
-                fc = 'none'
-            else:
-                fc = color
-            axs.scatter(obs_grasp[i*eps+j,1], obs_grasp[i*eps+j, 0],color=color, fc=fc)
-        #axs.scatter(obs_grasp[i*eps:(i+1)*eps, 1], obs_grasp[i*eps:(i+1)*eps, 0],color=color, fc=)
+
+        fc = color
+        axs.scatter(obs_grasp[i*eps:(i+1)*eps, 1], obs_grasp[i*eps:(i+1)*eps, 0],color=color, fc=fc)
         axs.scatter(avg_y, avg_x, color=color, marker='x', s=100)
 
         bottom_left = (box_pos[0]-0.0125,box_pos[1]-0.0125)
@@ -317,13 +220,15 @@ def main(cfg: ControlPipelineConfig):
         #axs.text(box_pos_avg_e8[i,0],box_pos_avg_e8[i,1]-0.004,str(dist_to_avg),ha='center')
     d_xy = np.array(d_xy)
 
-    axs.set_xlabel("Y Position")
-    axs.set_ylabel("X Position")
-    axs.set_title("Grasping Position")
+    axs.set_xlabel("Y Position", fontsize=14)
+    axs.set_ylabel("X Position", fontsize=14)
+    axs.set_title("Grasping Position", fontsize=20)
     axs.set_aspect('equal')
-    #axs.set_ylim(0.04,0.22)
+    #axs.set_ylim(0.08,0.15)
+    axs.tick_params(axis='both', which='major', labelsize=14)
     #axs.set_xlim(-0.1,0.1)
 
+    '''
     fig2, axs2 = plt.subplots(5,5, figsize=(15, 15))
     fig3, axs3 = plt.subplots(5,5, figsize=(15, 15))
     fig4, axs4 = plt.subplots(5,5, figsize=(15, 15))
@@ -597,7 +502,7 @@ def main(cfg: ControlPipelineConfig):
 
     axs8[0].legend(loc='upper right')
     axs8[1].legend(loc='upper right')
-
+    '''
     plt.show()
 
 
