@@ -203,16 +203,16 @@ class ManipulatorRobot:
                 "shape": (len(state_names),),
                 "names": state_names,
             },
-            #"observation.ee_pos": {
-            #    "dtype": "float32",
-            #    "shape": (4,),
-            #    "names": ["x", "y", "z", "yaw"],
-            #},
-            #"observation.d_pos": {
-            #    "dtype": "float32",
-            #    "shape": (3,),
-            #    "names": ["x", "y", "yaw"],
-            #},
+            "observation.ee_pos": {
+                "dtype": "float32",
+                "shape": (4,),
+                "names": ["x", "y", "z", "yaw"],
+            },
+            "observation.d_pos": {
+                "dtype": "float32",
+                "shape": (3,),
+                "names": ["x", "y", "yaw"],
+            },
         }
 
     @property

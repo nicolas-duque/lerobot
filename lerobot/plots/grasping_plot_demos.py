@@ -214,7 +214,7 @@ def main(cfg: ControlPipelineConfig):
         axs.scatter(avg_y, avg_x, color=color, marker='x', s=100)
 
         bottom_left = (box_pos[0]-0.0125,box_pos[1]-0.0125)
-        rec = plt.Rectangle(bottom_left,0.025,0.025, ec=color, fc='none', angle = box_pos[2], rotation_point="center")
+        rec = plt.Rectangle(bottom_left,0.025,0.025, ec=color, fc='none', angle = box_pos[2], rotation_point="center", linewidth=2)
         axs.add_patch(rec)
 
         #axs.text(box_pos_avg_e8[i,0],box_pos_avg_e8[i,1]-0.004,str(dist_to_avg),ha='center')
