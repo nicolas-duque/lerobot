@@ -162,7 +162,6 @@ def main(cfg: ControlPipelineConfig):
         # Get the episode
         ep_start = int(episode_data_index["from"][ep_idx])
         ep_end = int(episode_data_index["to"][ep_idx])
-        episode = dataset.hf_dataset
 
         obs_set = observations[ep_start+30:ep_end]
 
