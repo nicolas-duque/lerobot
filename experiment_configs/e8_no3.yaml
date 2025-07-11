@@ -13,4 +13,4 @@ wandb:
 
 batch_size: 4
 
-steps: 180000
+steps: 300000

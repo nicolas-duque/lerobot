@@ -296,6 +296,8 @@ class KochRobotConfig(ManipulatorRobotConfig):
                    [0.0338, 0.1231, 6.6873],[-0.0393, 0.0523, 5.1431]]
     '''
 
+    d_positions = [[0.1179, -0.0092, 6.4004]]
+
     mock: bool = False
 
 
