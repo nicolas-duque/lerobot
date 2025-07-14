@@ -138,18 +138,13 @@ def main(cfg: ControlPipelineConfig):
 
     c_cfg: EvalControlConfig = cfg.control
     # Create empty dataset or load existing saved episodes
-    if c_cfg.episode is not None:
-        dataset = LeRobotDataset(c_cfg.repo_id, root=c_cfg.root, episodes=[c_cfg.episode])
-        observations = dataset.hf_dataset.select_columns("observation.state")
-        actions = dataset.hf_dataset.select_columns("action")
-        joints = dataset.meta.info['features']['observation.state']['names']
-    else:
-        dataset = LeRobotDataset(c_cfg.repo_id, root=c_cfg.root)
-        observations = dataset.hf_dataset.select_columns("observation.state")['observation.state']
-        actions = dataset.hf_dataset.select_columns("action")['action']
-        joints = dataset.meta.info['features']['observation.state']['names']  
-        episodes = list(range(dataset.meta.total_episodes))
-        episode_data_index=get_episode_data_index(dataset.meta.episodes)
+ 
+    dataset = LeRobotDataset(c_cfg.repo_id, root=c_cfg.root)
+    observations = dataset.hf_dataset.select_columns("observation.state")['observation.state']
+    actions = dataset.hf_dataset.select_columns("action")['action']
+    joints = dataset.meta.info['features']['observation.state']['names']  
+    episodes = list(range(dataset.meta.total_episodes))
+    episode_data_index=get_episode_data_index(dataset.meta.episodes)
 
     # Loop through dataset
     #   Get observation (poses)
