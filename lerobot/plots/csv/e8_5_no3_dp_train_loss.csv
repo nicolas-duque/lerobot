@@ -1,4 +1,4 @@
-"Step","robustness_e8_5_no3 - train/loss","robustness_e8_5_no3 - train/loss__MIN","robustness_e8_5_no3 - train/loss__MAX"
+"Step","Train loss","robustness_e8_5_no3 - train/loss__MIN","robustness_e8_5_no3 - train/loss__MAX"
 "200","7.462055566310883","7.462055566310883","7.462055566310883"
 "400","3.3316139960289","3.3316139960289","3.3316139960289"
 "600","2.8110306918621064","2.8110306918621064","2.8110306918621064"

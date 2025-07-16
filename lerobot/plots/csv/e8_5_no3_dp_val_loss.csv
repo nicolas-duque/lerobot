@@ -1,4 +1,4 @@
-"Step","robustness_e8_5_no3 - train/val_loss","robustness_e8_5_no3 - train/val_loss__MIN","robustness_e8_5_no3 - train/val_loss__MAX"
+"Step","Validation loss","robustness_e8_5_no3 - train/val_loss__MIN","robustness_e8_5_no3 - train/val_loss__MAX"
 "200","0.7771721839904785","0.7771721839904785","0.7771721839904785"
 "400","0.6432122468948365","0.6432122468948365","0.6432122468948365"
 "600","0.6777766227722168","0.6777766227722168","0.6777766227722168"
