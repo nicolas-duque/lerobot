@@ -1,6 +1,8 @@
 import logging
 from dataclasses import asdict, dataclass
+import matplotlib as mpl
 import numpy as np
+mpl.use("pgf")
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from pprint import pformat
@@ -21,6 +23,48 @@ from lerobot.common.robot_devices.control_configs import (
 from lerobot.common.utils.utils import init_logging, get_safe_torch_device
 from lerobot.configs import parser
 
+# Plot dimensions
+lw = 6.29
+aspect_ratio = 1.61803398875 
+h = lw / aspect_ratio
+
+
+plt.rcParams.update({
+    "pgf.texsystem": "pdflatex",  # Or "xelatex" or "lualatex" depending on your LaTeX setup
+    "text.usetex": True,         # Use LaTeX for all text rendering
+    "font.family": "serif",      # Use serif font, typically matching LaTeX's default
+    "font.serif": [],            # Clear specific serif fonts to let LaTeX choose
+    "pgf.rcfonts": False,        # Don't setup fonts from rc parameters; let LaTeX handle them
+    'mathtext.default': "regular",
+
+    # Optional: Customize font sizes for better integration with your document
+     "font.size": 12,
+     "axes.labelsize": 12,
+     "legend.fontsize": 12,
+     "xtick.labelsize": 10,
+     "ytick.labelsize": 10,
+     "axes.titlesize": 16,
+     "figure.titlesize": 20,
+    
+    # Figure size in inches (important for matching LaTeX document dimensions)
+    # You might want to calculate this based on your LaTeX document's \textwidth
+    "figure.figsize": (lw, h), # Example: Golden ratio for a single column
+    
+
+    
+    # Custom preamble for LaTeX packages or commands
+    "pgf.preamble": "\n".join([
+        r"\usepackage[utf8x]{inputenc}",  # or utf8
+        r"\usepackage[T1]{fontenc}",
+        r"\usepackage{lmodern}",        # Example: Another font package
+        # Add any other LaTeX packages you need for math, special symbols, etc.
+        r"\usepackage{mathtools}",
+        # r"\usepackage{amsfonts}",
+        r"\usepackage{amssymb}",
+        r"\providecommand{\mathdefault}[1]{#1}",
+    ]),
+    
+})
 
 # Function to compute transformation matrix using DH parameters
 def dh_transform(theta, d, a, alpha):
@@ -61,7 +105,7 @@ def main():
     positions_new, frames_new = compute_positions(dh_params_new)
     
     # Plot the new DH parameter visualization
-    fig = plt.figure(figsize=(8, 8))
+    fig = plt.figure(figsize=(lw, lw))
     ax = fig.add_subplot(111, projection="3d")
 
     # Plot links
@@ -78,20 +122,21 @@ def main():
 
 
     # Labels and view settings
-    ax.set_xlabel("X-axis", fontsize=14)
-    ax.set_ylabel("Y-axis", fontsize=14)
-    ax.set_zlabel("Z-axis", fontsize=14)
-    ax.set_title("DH Parameters Visualization",fontsize=20)
+    ax.set_xlabel("X-axis", fontsize=12)
+    ax.set_ylabel("Y-axis", fontsize=12)
+    ax.set_zlabel("Z-axis", fontsize=12)
+    ax.set_title("DH Parameters Visualization",fontsize=14)
     ax.set_ybound(-0.1, 0.1)
 
-    ax.legend(loc="upper left", fontsize=14, bbox_to_anchor=(0.15, 0.80))
-    ax.tick_params(axis='both', which='major', labelsize=14)
+    ax.legend(loc="upper left", fontsize=14, bbox_to_anchor=(0.1, 0.80))
+    ax.tick_params(axis='both', which='major', labelsize=12)
     ax.view_init(elev=30, azim=45)
 
 
     fig.tight_layout()
+    fig.savefig("pgf/DH_params.pgf", bbox_inches='tight', pad_inches=0.2)
 
-    plt.show()
+    #plt.show()
     
 
 
