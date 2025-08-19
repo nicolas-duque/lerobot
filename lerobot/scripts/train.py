@@ -13,6 +13,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+# This script is modified from the original version to include the computation of the validation loss
+# during training.
+# Modified by: Nicolás Duque Suárez
+
 import logging
 import time
 from contextlib import nullcontext
@@ -163,9 +168,10 @@ def train(cfg: TrainPipelineConfig):
     logging.info(f"{num_total_params=} ({format_big_number(num_total_params)})")
 
     # Episode-level split 
+    # Modification of the original script to include validation loss computation
     # #################################################################################
     num_eps = len(dataset.episode_data_index["from"])
-    val_size = 1#int(num_eps * 0.1)
+    val_size = 1
     g = torch.Generator().manual_seed(cfg.seed or 42)
     shuffled = torch.randperm(num_eps, generator=g).tolist()
     split_episodes = {"train": shuffled[:-val_size], "val": shuffled[-val_size:]}

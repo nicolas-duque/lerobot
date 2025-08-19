@@ -13,6 +13,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+
+# This script is a copy of the train.py script from the lerobot repository,
+# modified to include the computation of the end-effector position and yaw angle for training.
+# Modified by: Nicolás Duque Suárez
+
 import logging
 import time
 from contextlib import nullcontext
@@ -131,33 +137,19 @@ def train(cfg: TrainPipelineConfig):
     dataset = make_dataset(cfg)
 
     ####################################################################
-    print(dataset.hf_dataset[0])
-    episodes=[]
-    if dataset.episodes is None:
-        episodes = range(dataset.num_episodes)
-    else:
-        episodes = dataset.episodes
-    grasp_vals = get_grasping_idxs(dataset.hf_dataset.select_columns(["observation.state","episode_index"]),episodes)
-    
-    dataset.hf_dataset = dataset.hf_dataset.map( lambda data: add_fk(data, grasp_vals))
+    # Addition of the structure and statistics of the end-effector position and yaw angle observation
 
-    dataset.meta.features["observation.state"]["shape"] = (dataset.meta.features["observation.state"]["shape"][0], ) #+ EE pos + 3 dice xy pos + yaw
+    # Mapping of the Forward Kinematics (FK) to the dataset.
+    dataset.hf_dataset = dataset.hf_dataset.map(add_fk)
+
+    # Observation feature structure addition
     dataset.meta.features["observation.ee_pos"] = {
                 "dtype": "float32",
                 "shape": (4,),
                 "names": ["x", "y", "z", "yaw"],
             }
-    dataset.meta.features["observation.d_pos"] = {
-                "dtype": "float32",
-                "shape": (3,),
-                "names": ["x", "y", "yaw"],
-            }
 
-    dataset.meta.stats["observation.state"]["mean"]  = np.mean(dataset.hf_dataset["observation.state"], axis=0)
-    dataset.meta.stats["observation.state"]["std"]  = np.std(dataset.hf_dataset["observation.state"], axis=0)
-    dataset.meta.stats["observation.state"]["min"]  = np.min(dataset.hf_dataset["observation.state"], axis=0)
-    dataset.meta.stats["observation.state"]["max"]  = np.max(dataset.hf_dataset["observation.state"], axis=0)
-
+    # Statistics metadata addition
     dataset.meta.stats["observation.ee_pos"] = {
         "mean": np.mean(dataset.hf_dataset["observation.ee_pos"], axis=0),
         "std": np.std(dataset.hf_dataset["observation.ee_pos"], axis=0),
@@ -165,15 +157,7 @@ def train(cfg: TrainPipelineConfig):
         "max": np.max(dataset.hf_dataset["observation.ee_pos"], axis=0),
     }
 
-    dataset.meta.stats["observation.d_pos"] = {
-        "mean": np.mean(dataset.hf_dataset["observation.d_pos"], axis=0),
-        "std": np.std(dataset.hf_dataset["observation.d_pos"], axis=0),
-        "min": np.min(dataset.hf_dataset["observation.d_pos"], axis=0),
-        "max": np.max(dataset.hf_dataset["observation.d_pos"], axis=0),
-    }
-
-
-    print(dataset.hf_dataset[0])
+    #print(dataset.hf_dataset[0])
 
 
     #####################################################################
@@ -214,9 +198,10 @@ def train(cfg: TrainPipelineConfig):
     logging.info(f"{num_total_params=} ({format_big_number(num_total_params)})")
     
     # Episode-level split 
+    # Modification of the original script to include validation loss computation
     # #################################################################################
     num_eps = len(dataset.episode_data_index["from"])
-    val_size = 1#int(num_eps * 0.1)
+    val_size = 1
     g = torch.Generator().manual_seed(cfg.seed or 42)
     shuffled = torch.randperm(num_eps, generator=g).tolist()
     split_episodes = {"train": shuffled[:-val_size], "val": shuffled[-val_size:]}
@@ -408,6 +393,7 @@ def compute_fk(state):
     
     T = np.eye(4)
     state = np.radians(state)
+    # Adjust DH parameters for physical robot configuration offsets
     state[1] -= 0.136
     state[2] += 0.162
     state[3] -= np.pi/2  # Adjust for the wrist roll
@@ -417,35 +403,18 @@ def compute_fk(state):
         Ti = dh_transform(state[i], params["d"], params["a"], params["alpha"])
         T = T@Ti # Multiply transformation matrices
 
+    # Extract yaw angle from the transformation matrix
     yaw = np.degrees(np.arctan2(T[1, 0], T[0, 0]))
-    return torch.tensor(T[:3, 3]), torch.tensor([yaw])  # Extract position (x, y, z)
-    
-def add_fk(data, grasp_vals):
-    
+    return torch.tensor(T[:3, 3]), torch.tensor([yaw])
+
+# Mapping function used to add end-effector position and yaw angle to the dataset
+# for each observation step (set of joint angles) recorded
+def add_fk(data):
         # Calculate FK for each joint
         fk,yaw = compute_fk(data["observation.state"])
-        # Create new column
+        # Add the end-effector position and yaw angle to the observation
         data["observation.ee_pos"] = torch.cat([fk, yaw], dim=0)
-        data["observation.d_pos"] = torch.tensor(grasp_vals[int(data["episode_index"])])
-        
         return data
-
-def get_grasping_idxs(dataset,episodes):
-    grasp_vals = {}
-    for i in episodes:
-        ep_vals = dataset.filter(lambda x: x["episode_index"] == i)
-        grasp_idx = next((j for j, obs in enumerate(ep_vals["observation.state"]) if obs[-1] < 30), None)
-
-        if grasp_idx is None:
-            grasp_idx = next((j for j, obs in enumerate(ep_vals["observation.state"]) if obs[-1] < 40), None)
-        
-        if grasp_idx is None:
-            grasp_vals[i] = [torch.tensor(0.0, dtype=torch.float64), torch.tensor(0.0, dtype=torch.float64), torch.tensor(0.0, dtype=torch.float64)]
-        else:
-            fk, yaw = compute_fk(ep_vals["observation.state"][grasp_idx])
-            grasp_vals[i] = [fk[0], fk[1],yaw[0]]
-
-    return grasp_vals
 ##################################################################################################  
 if __name__ == "__main__":
     init_logging()

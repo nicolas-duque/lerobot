@@ -18,6 +18,8 @@ and send orders to its motors.
 # TODO(rcadene, aliberts): reorganize the codebase into one file per robot, with the associated
 # calibration procedure, to make it easy for people to add their own robot.
 
+# This file, original from the lerobot library, has been modified to include the
+
 import json
 import logging
 import time
@@ -204,6 +206,9 @@ class ManipulatorRobot:
                 "names": state_names,
             },
             ## Comment ee_pos and d_pos during dataset collection, uncomment during inference
+            ## Only uncomment ee_pos if the policy was trained with train_EE.py
+            ## Uncomment d_pos and ee_pos if the policy was trained with train_BP.py
+
             #"observation.ee_pos": {
             #    "dtype": "float32",
             #    "shape": (4,),
@@ -577,22 +582,24 @@ class ManipulatorRobot:
         obs_dict["observation.state"] = state
 
         ############################################################################################
-        # Add EE position to observation only during inference
-        if self.robot_type == "koch" and episode_idx is not None and total_episodes is not None:
+        # Add extra observations (EE Position and BP) to observation only during inference
+        # Comment this section when using policy trained with original train.py script
+        if self.robot_type == "koch" and episode_idx is not None:
             ee_pos, yaw = self.compute_fk(state)
 
+            # Add the end-effector position and yaw to the observation
             obs_dict["observation.ee_pos"] = torch.cat([ee_pos, yaw], dim=0)
             obs_dict["observation.ee_pos"] = obs_dict["observation.ee_pos"].to(torch.float32)
+
+            # Comment the following lines (containing d_pos) when using policy trained with train_EE.py script
+            # Index representing which d_pos to use
             idx = episode_idx // int(total_episodes/len(self.d_pos))
 
-            #if "observation.d_pos" in obs_dict:
+            # Add the d_pos to the observation (constant throughout the episode)
             d_pos = torch.tensor(self.d_pos[idx])
             obs_dict["observation.d_pos"] = d_pos.to(torch.float32)
+
             print("pos_idx: ", idx, "ep_idx: ", episode_idx, "d_pos: ", d_pos)
-            #else:
-                #del self.features["observation.d_pos"]
-                #del self.motor_features["observation.d_pos"]
-                #print("pos_idx: ", idx, "ep_idx: ", episode_idx)
             
         ############################################################################################
     
@@ -682,6 +689,7 @@ class ManipulatorRobot:
     def compute_fk(self,state):
         T = np.eye(4)
         state = np.radians(state)
+        # Adjust DH parameters for physical robot configuration offsets
         state[1] -= 0.136
         state[2] += 0.162
         state[3] -= np.pi/2  # Adjust for the wrist roll
@@ -690,6 +698,8 @@ class ManipulatorRobot:
         for i, params in enumerate(self.dh_params):
             Ti = self.dh_transform(state[i], params["d"], params["a"], params["alpha"])
             T = T@Ti # Multiply transformation matrices
-            yaw = np.degrees(np.arctan2(T[1, 0], T[0, 0]))
+        
+        # Extract yaw angle from the transformation matrix
+        yaw = np.degrees(np.arctan2(T[1, 0], T[0, 0]))
 
-        return torch.tensor((T[:3, 3])),torch.tensor([yaw])  # Extract position (x, y, z)
+        return torch.tensor((T[:3, 3])),torch.tensor([yaw]) 
